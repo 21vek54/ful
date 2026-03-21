@@ -1,0 +1,2862 @@
+﻿[
+    {
+        "id":  "tab_conveyor_monitor",
+        "type":  "tab",
+        "label":  "Конвейер",
+        "disabled":  false,
+        "info":  ""
+    },
+    {
+        "id":  "ui_base_conveyor",
+        "type":  "ui-base",
+        "name":  "Панель управления",
+        "path":  "/dashboard",
+        "appIcon":  "",
+        "includeClientData":  true,
+        "acceptsClientConfig":  [
+                                    "ui-notification",
+                                    "ui-control"
+                                ],
+        "showPathInSidebar":  false,
+        "headerContent":  "page",
+        "navigationStyle":  "default",
+        "titleBarStyle":  "default",
+        "showReconnectNotification":  true,
+        "notificationDisplayTime":  1,
+        "showDisconnectNotification":  true,
+        "allowInstall":  false
+    },
+    {
+        "id":  "ui_theme_conveyor",
+        "type":  "ui-theme",
+        "name":  "Тема панели",
+        "colors":  {
+                       "surface":  "#ffffff",
+                       "primary":  "#0094CE",
+                       "bgPage":  "#eeeeee",
+                       "groupBg":  "#ffffff",
+                       "groupOutline":  "#cccccc"
+                   },
+        "sizes":  {
+                      "density":  "default",
+                      "pagePadding":  "12px",
+                      "groupGap":  "12px",
+                      "groupBorderRadius":  "4px",
+                      "widgetGap":  "12px"
+                  }
+    },
+    {
+        "id":  "ui_page_conveyor",
+        "type":  "ui-page",
+        "name":  "Конвейер",
+        "ui":  "ui_base_conveyor",
+        "path":  "/conveyor",
+        "icon":  "home",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ],
+        "order":  0,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_status",
+        "type":  "ui-group",
+        "name":  "Статус конвейера",
+        "page":  "ui_page_conveyor",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_broker_local",
+        "type":  "mqtt-broker",
+        "name":  "Локальный Mosquitto",
+        "broker":  "192.168.1.136",
+        "port":  "1883",
+        "clientid":  "",
+        "autoConnect":  true,
+        "usetls":  false,
+        "protocolVersion":  "4",
+        "keepalive":  "60",
+        "cleansession":  true,
+        "autoUnsubscribe":  true,
+        "birthTopic":  "",
+        "birthQos":  "0",
+        "birthRetain":  "false",
+        "birthPayload":  "",
+        "birthMsg":  {
+
+                     },
+        "closeTopic":  "",
+        "closeQos":  "0",
+        "closeRetain":  "false",
+        "closePayload":  "",
+        "closeMsg":  {
+
+                     },
+        "willTopic":  "",
+        "willQos":  "0",
+        "willRetain":  "false",
+        "willPayload":  "",
+        "willMsg":  {
+
+                    },
+        "userProps":  "",
+        "sessionExpiry":  ""
+    },
+    {
+        "id":  "mqtt_in_status",
+        "type":  "mqtt in",
+        "z":  "tab_conveyor_monitor",
+        "name":  "Статус конвейера через мастер",
+        "topic":  "fyl/master_com12/status",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  180,
+        "y":  120,
+        "wires":  [
+                      [
+                          "fn_status_text"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_status_text",
+        "type":  "function",
+        "z":  "tab_conveyor_monitor",
+        "name":  "Формат статуса конвейера",
+        "func":  "let p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) return null;\nconst dev = (p.devices \u0026\u0026 p.devices.conveyor) ? p.devices.conveyor : {};\nconst online = dev.online ? \u0027в сети\u0027 : \u0027не в сети\u0027;\nconst proto = dev.kind_ok ? \u0027норма\u0027 : \u0027ошибка\u0027;\nmsg.payload = `Конвейер: ${online} | протокол=${proto} | статус=${dev.status_word ?? \u0027-\u0027} | ошибка=${dev.error_word ?? \u0027-\u0027} | флаг=${dev.flag_state ?? \u0027-\u0027} | движение=${dev.motion_state ?? \u0027-\u0027}`;\nreturn msg;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  400,
+        "y":  120,
+        "wires":  [
+                      [
+                          "ui_text_status",
+                          "debug_status"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_text_status",
+        "type":  "ui-text",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_status",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Статус конвейера",
+        "label":  "Конвейер (12)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  20,
+        "color":  "#0094CE",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "payload",
+        "valueType":  "msg",
+        "x":  640,
+        "y":  120,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_status",
+        "type":  "debug",
+        "z":  "tab_conveyor_monitor",
+        "name":  "Отладка статуса MQTT",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  false,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  650,
+        "y":  180,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_page_manual",
+        "type":  "ui-page",
+        "name":  "Ручное управление",
+        "ui":  "ui_base_conveyor",
+        "path":  "/manual",
+        "icon":  "settings",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ],
+        "order":  1,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_conveyor_four",
+        "type":  "ui-group",
+        "name":  "Прямое управление двигателями",
+        "page":  "ui_page_manual",
+        "width":  "12",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_tpl_conveyor_matrix",
+        "type":  "ui-template",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_conveyor_four",
+        "page":  "",
+        "ui":  "",
+        "name":  "Матрица 4 конвейеров",
+        "order":  1,
+        "width":  "12",
+        "height":  "10",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"conv-wrap\"\u003e\n    \u003cdiv class=\"conv-matrix-wrap\"\u003e\n      \u003cdiv class=\"conv-matrix\"\u003e\n        \u003cdiv class=\"conv-head span-2\"\u003eПодводной\u003c/div\u003e\n        \u003cdiv class=\"conv-head span-2\"\u003eОтводной\u003c/div\u003e\n\n        \u003cdiv class=\"conv-sub\"\u003eОсновной\u003c/div\u003e\n        \u003cdiv class=\"conv-sub\"\u003e2 ручейковый\u003c/div\u003e\n        \u003cdiv class=\"conv-sub\"\u003e2 ручейковый\u003c/div\u003e\n        \u003cdiv class=\"conv-sub\"\u003eОсновной\u003c/div\u003e\n\n        \u003cbutton type=\"button\" class=\"conv-btn start\" @click=\"sendCommand(\u0027CONV MAINSTART\u0027)\"\u003eСтарт\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"conv-btn start\" @click=\"sendCommand(\u0027CONV POSSTART\u0027)\"\u003eСтарт\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"conv-btn start\" @click=\"sendCommand(\u0027CONV STEP2START\u0027)\"\u003eСтарт\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"conv-btn start\" @click=\"sendCommand(\u0027VFD START 5 FWD\u0027)\"\u003eСтарт\u003c/button\u003e\n\n        \u003cbutton type=\"button\" class=\"conv-btn stop\" @click=\"sendCommand(\u0027CONV MAINSTOP\u0027)\"\u003eСтоп\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"conv-btn stop\" @click=\"sendCommand(\u0027CONV POSSTOP\u0027)\"\u003eСтоп\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"conv-btn stop\" @click=\"sendCommand(\u0027CONV STEP2STOP\u0027)\"\u003eСтоп\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"conv-btn stop\" @click=\"sendCommand(\u0027VFD STOP\u0027)\"\u003eСтоп\u003c/button\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"otvod-setup\"\u003e\n      \u003cdiv class=\"otvod-title\"\u003eНаладка отвода:\u003c/div\u003e\n      \u003cdiv class=\"otvod-grid\"\u003e\n        \u003cbutton type=\"button\" class=\"otvod-btn\" @click=\"sendSequenceAction(\u0027otvod\u0027)\"\u003eЗапустить 2 ручейковый отводной конвейер\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"otvod-btn\" @click=\"sendSequenceAction(\u0027vfd\u0027)\"\u003eЗапустить основной конвейер\u003c/button\u003e\n      \u003c/div\u003e\n\n      \u003cdiv class=\"otvod-input-grid\"\u003e\n        \u003cdiv\u003e\n          \u003cdiv class=\"otvod-label\"\u003eНА :\u003c/div\u003e\n          \u003cinput class=\"otvod-input\" type=\"number\" min=\"1\" step=\"1\" v-model=\"otvodSteps\"\u003e\n          \u003cdiv class=\"otvod-unit\"\u003eшагов\u003c/div\u003e\n        \u003c/div\u003e\n        \u003cdiv\u003e\n          \u003cdiv class=\"otvod-label\"\u003eНА :\u003c/div\u003e\n          \u003cinput class=\"otvod-input\" type=\"number\" min=\"0.1\" step=\"0.1\" v-model=\"runCm\"\u003e\n          \u003cdiv class=\"otvod-unit\"\u003eсм\u003c/div\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n\n      \u003cbutton type=\"button\" class=\"otvod-btn otvod-btn-wide\" @click=\"sendSequenceAction(\u0027sequence\u0027)\"\u003eЗапустить по очереди\u003c/button\u003e\n      \u003cbutton type=\"button\" class=\"otvod-btn otvod-btn-wide\" @click=\"sendSequenceAction(\u0027cycle3\u0027)\"\u003eРабочий цикл отводных x3\u003c/button\u003e\n\n      \u003cdiv class=\"common-cycle-grid\"\u003e\n        \u003cbutton type=\"button\" class=\"otvod-btn otvod-btn-common-start\" @click=\"sendCommand(\u0027COMMON START\u0027)\"\u003eОбщий цикл: старт\u003c/button\u003e\n        \u003cbutton type=\"button\" class=\"otvod-btn otvod-btn-common-pause\" @click=\"sendCommand(\u0027COMMON PAUSE\u0027)\"\u003eОбщий цикл: пауза\u003c/button\u003e\n      \u003c/div\u003e\n\n      \u003cdiv class=\"otvod-note\"\u003eРабочий цикл: OTVOD 920, затем основной 43 см, строго последовательно 3 раза.\u003c/div\u003e\n      \u003cdiv class=\"otvod-note\"\u003eОбщий цикл: ждём 6 тарелок, запускаем MAN R, после 7 шага параллельно стартуют Program 1, OTCYCLE и запайщик.\u003c/div\u003e\n    \u003c/div\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            otvodSteps: 920,\n            runCm: 43\n        }\n    },\n    methods: {\n        sendCommand(payload) {\n            this.send({ payload })\n        },\n        normalizeSteps() {\n            const value = Math.round(Number(this.otvodSteps))\n            return Number.isFinite(value) \u0026\u0026 value \u003e 0 ? value : 920\n        },\n        normalizeCm() {\n            const value = Math.round(Number(this.runCm) * 10) / 10\n            return Number.isFinite(value) \u0026\u0026 value \u003e 0 ? value : 43\n        },\n        sendSequenceAction(action) {\n            const steps = this.normalizeSteps()\n            const cm = this.normalizeCm()\n            this.otvodSteps = steps\n            this.runCm = cm\n            this.send({ payload: { action, steps, cm } })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.conv-wrap {\n    width: 100%;\n}\n.conv-matrix-wrap {\n    width: 100%;\n    overflow: hidden;\n}\n.conv-matrix {\n    width: 100%;\n    display: grid;\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n    gap: 0;\n    border: 1px solid #b0bec5;\n    background: #ffffff;\n    box-sizing: border-box;\n}\n.conv-head,\n.conv-sub,\n.conv-btn {\n    box-sizing: border-box;\n    border-right: 1px solid #b0bec5;\n    border-bottom: 1px solid #b0bec5;\n}\n.conv-head:nth-child(2),\n.conv-sub:nth-child(6),\n.conv-btn:nth-child(10),\n.conv-btn:nth-child(14) {\n    border-right: 0;\n}\n.conv-btn:nth-last-child(-n + 4) {\n    border-bottom: 0;\n}\n.conv-head {\n    padding: 8px 6px;\n    text-align: center;\n    font-weight: 700;\n    font-size: 15px;\n    line-height: 1.15;\n    background: #f4f7fb;\n}\n.conv-head.span-2 {\n    grid-column: span 2;\n}\n.conv-sub {\n    padding: 8px 6px;\n    text-align: center;\n    font-weight: 600;\n    font-size: 14px;\n    line-height: 1.15;\n    word-break: break-word;\n    background: #ffffff;\n}\n.conv-btn {\n    appearance: none;\n    width: 100%;\n    min-height: 40px;\n    font-size: 15px;\n    border-top: 0;\n    border-left: 0;\n    border-radius: 0;\n    cursor: pointer;\n}\n.conv-btn.start {\n    background: #12a6e6;\n    color: #ffffff;\n}\n.conv-btn.stop {\n    background: #e53935;\n    color: #ffffff;\n}\n.conv-btn:hover {\n    filter: brightness(0.96);\n}\n.otvod-setup {\n    margin-top: 14px;\n}\n.otvod-title {\n    margin-bottom: 8px;\n    font-weight: 700;\n    font-size: 18px;\n}\n.otvod-grid,\n.otvod-input-grid,\n.common-cycle-grid {\n    display: grid;\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: 10px;\n}\n.common-cycle-grid {\n    margin-top: 12px;\n}\n.otvod-btn {\n    width: 100%;\n    min-height: 84px;\n    padding: 10px;\n    border: 0;\n    cursor: pointer;\n    background: #93c83e;\n    color: #111111;\n    font-size: 16px;\n    line-height: 1.25;\n    font-weight: 600;\n}\n.otvod-btn-wide,\n.otvod-btn-common-start,\n.otvod-btn-common-pause {\n    min-height: 46px;\n    margin-top: 12px;\n}\n.otvod-btn-common-start {\n    background: #2e7d32;\n    color: #ffffff;\n}\n.otvod-btn-common-pause {\n    background: #ef6c00;\n    color: #ffffff;\n}\n.otvod-label,\n.otvod-unit {\n    margin: 4px 0;\n    font-size: 15px;\n    font-weight: 600;\n}\n.otvod-input {\n    width: 100%;\n    min-height: 42px;\n    padding: 8px 10px;\n    border: 0;\n    outline: 0;\n    box-sizing: border-box;\n    background: #11a6e4;\n    color: #ffffff;\n    font-size: 18px;\n    font-weight: 700;\n    text-align: center;\n}\n.otvod-note {\n    margin-top: 8px;\n    font-size: 13px;\n    color: #4e5b61;\n}\n@media (max-width: 900px) {\n    .conv-head {\n        font-size: 14px;\n        padding: 7px 4px;\n    }\n    .conv-sub {\n        font-size: 12px;\n        padding: 7px 4px;\n    }\n    .conv-btn {\n        min-height: 38px;\n        font-size: 14px;\n    }\n}\n@media (max-width: 720px) {\n    .otvod-grid,\n    .otvod-input-grid,\n    .common-cycle-grid {\n        grid-template-columns: 1fr;\n    }\n    .otvod-btn {\n        min-height: 64px;\n        font-size: 15px;\n    }\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  530,
+        "y":  650,
+        "wires":  [
+                      [
+                          "fn_manual_otvod_dispatch"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_group_manual",
+        "type":  "ui-group",
+        "name":  "Команды конвейера",
+        "page":  "ui_page_manual",
+        "width":  "6",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_out_flag_cmd",
+        "type":  "mqtt out",
+        "z":  "tab_conveyor_monitor",
+        "name":  "Команды конвейера через мастера",
+        "topic":  "fyl/master_com12/cmd",
+        "qos":  "1",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  740,
+        "y":  300,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_btn_flag_up",
+        "type":  "ui-button",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_manual",
+        "name":  "Флаг вверх",
+        "label":  "Флаг вверх",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "CONV W",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1fa84a",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  420,
+        "y":  260,
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_flag_down",
+        "type":  "ui-button",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_manual",
+        "name":  "Флаг вниз",
+        "label":  "Флаг вниз",
+        "order":  3,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "CONV S",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#b03a2e",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  420,
+        "y":  340,
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "tab_master_mqtt",
+        "type":  "tab",
+        "label":  "Мастер MQTT",
+        "disabled":  false,
+        "info":  ""
+    },
+    {
+        "id":  "mqtt_broker_master1884",
+        "type":  "mqtt-broker",
+        "name":  "Локальный Mosquitto 1884",
+        "broker":  "127.0.0.1",
+        "port":  "1884",
+        "clientid":  "",
+        "autoConnect":  true,
+        "usetls":  false,
+        "protocolVersion":  "4",
+        "keepalive":  "60",
+        "cleansession":  true,
+        "autoUnsubscribe":  true,
+        "birthTopic":  "",
+        "birthQos":  "0",
+        "birthRetain":  "false",
+        "birthPayload":  "",
+        "birthMsg":  {
+
+                     },
+        "closeTopic":  "",
+        "closeQos":  "0",
+        "closeRetain":  "false",
+        "closePayload":  "",
+        "closeMsg":  {
+
+                     },
+        "willTopic":  "",
+        "willQos":  "0",
+        "willRetain":  "false",
+        "willPayload":  "",
+        "willMsg":  {
+
+                    },
+        "userProps":  "",
+        "sessionExpiry":  ""
+    },
+    {
+        "id":  "ui_page_master",
+        "type":  "ui-page",
+        "name":  "Мастер",
+        "ui":  "ui_base_conveyor",
+        "path":  "/master",
+        "icon":  "tune",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "px":  0,
+                                "name":  "Default",
+                                "cols":  3
+                            },
+                            {
+                                "px":  576,
+                                "name":  "Tablet",
+                                "cols":  6
+                            },
+                            {
+                                "px":  768,
+                                "name":  "Small Desktop",
+                                "cols":  9
+                            },
+                            {
+                                "px":  1024,
+                                "name":  "Desktop",
+                                "cols":  12
+                            }
+                        ],
+        "order":  2,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_master_status",
+        "type":  "ui-group",
+        "name":  "Статус мастера",
+        "page":  "ui_page_master",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_master_cmd",
+        "type":  "ui-group",
+        "name":  "Команды мастера",
+        "page":  "ui_page_master",
+        "width":  "6",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_in_master_status",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "name":  "Статус мастера JSON",
+        "topic":  "fyl/master_com12/status",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  180,
+        "y":  140,
+        "wires":  [
+                      [
+                          "fn_master_status_parse",
+                          "debug_master_status",
+                          "fn_rs485_status_parse",
+                          "fn_common_cycle_dashboard",
+                          "fn_common_cycle_sections"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_master_status_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "Разбор статуса мастера",
+        "func":  "let p = msg.payload;\nif (typeof p === \"string\") {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \"object\") return null;\n\nconst wifiState = p.wifi ? \"\\u043f\\u043e\\u0434\\u043a\\u043b\\u044e\\u0447\\u0435\\u043d\" : \"\\u043d\\u0435\\u0442\";\nconst ip = p.ip ? p.ip : \"-\";\nconst modbusId = (p.modbus_id !== undefined) ? p.modbus_id : \"-\";\nconst req = (p.mb_req !== undefined) ? p.mb_req : 0;\nconst ok = (p.mb_ok !== undefined) ? p.mb_ok : 0;\nconst err = (p.mb_err !== undefined) ? p.mb_err : 0;\nconst baseHz = (p.vfd_base_hz !== undefined) ? Number(p.vfd_base_hz).toFixed(2) : \"0.00\";\nconst cmdSeq = (p.cmd_seq !== undefined) ? p.cmd_seq : 0;\nconst lastCmd = p.last_cmd ? p.last_cmd : \"-\";\n\nconst wifi = `Wi-Fi: ${wifiState} | IP: ${ip}`;\nconst mb = `ID=${modbusId} | req=${req} | ok=${ok} | err=${err}`;\nconst vfd = `\\u0411\\u0430\\u0437\\u043e\\u0432\\u0430\\u044f \\u0447\\u0430\\u0441\\u0442\\u043e\\u0442\\u0430: ${baseHz} \\u0413\\u0446`;\nconst last = `\\u041a\\u043e\\u043c\\u0430\\u043d\\u0434\\u0430 #${cmdSeq}: ${lastCmd}`;\n\nreturn [{ payload: wifi }, { payload: mb }, { payload: vfd }, { payload: last }];",
+        "outputs":  4,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  390,
+        "y":  140,
+        "wires":  [
+                      [
+                          "ui_txt_master_wifi",
+                          "mqtt_out_master_trace"
+                      ],
+                      [
+                          "ui_txt_master_modbus",
+                          "mqtt_out_master_trace"
+                      ],
+                      [
+                          "ui_txt_master_vfd",
+                          "mqtt_out_master_trace"
+                      ],
+                      [
+                          "ui_txt_master_lastcmd",
+                          "mqtt_out_master_trace"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_wifi",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Связь Wi-Fi",
+        "label":  "Связь Wi-Fi",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  18,
+        "color":  "#0094CE",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  660,
+        "y":  100,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_modbus",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Состояние Modbus",
+        "label":  "Modbus",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  16,
+        "color":  "#2c3e50",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  670,
+        "y":  140,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_vfd",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  3,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Состояние ПЧ",
+        "label":  "ПЧ",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  16,
+        "color":  "#2c3e50",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  650,
+        "y":  180,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_master_status",
+        "type":  "debug",
+        "z":  "tab_master_mqtt",
+        "name":  "Отладка статуса мастера",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  false,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  410,
+        "y":  220,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_out_master_cmd",
+        "type":  "mqtt out",
+        "z":  "tab_master_mqtt",
+        "name":  "Команды мастера MQTT",
+        "topic":  "fyl/master_com12/cmd",
+        "qos":  "1",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  710,
+        "y":  340,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_status",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Запрос статуса",
+        "label":  "СТАТУС",
+        "order":  1,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1565c0",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  280,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_state",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Запрос состояния",
+        "label":  "СОСТОЯНИЕ",
+        "order":  2,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "STATE",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#00897b",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  320,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_wifi",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Статус Wi-Fi",
+        "label":  "СТАТУС Wi-Fi",
+        "order":  3,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "WIFI STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#6a1b9a",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  440,
+        "y":  360,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_mqtt",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Статус MQTT",
+        "label":  "СТАТУС MQTT",
+        "order":  4,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MQTT STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#5d4037",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  400,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_vfdstat",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Статус ПЧ",
+        "label":  "ПЧ СТАТУС",
+        "order":  5,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "VFD STAT",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  440,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_vfdrunfreq",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Частота ПЧ",
+        "label":  "ПЧ ЧАСТОТА",
+        "order":  6,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "VFD RUNFREQ",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  460,
+        "y":  480,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_vfdstop",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "Стоп ПЧ",
+        "label":  "ПЧ СТОП",
+        "order":  7,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "VFD STOP",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#c62828",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  520,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "4fcb92f6e4a8cf17",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "page":  "",
+        "ui":  "",
+        "name":  "ПЧ пуск 5с",
+        "order":  8,
+        "width":  "2",
+        "height":  "1",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"vfd-run5-widget\"\u003e\n    \u003cv-btn color=\"warning\" variant=\"flat\" block @click=\"dialog = true\"\u003e\n      ПЧ 5с\n    \u003c/v-btn\u003e\n    \u003cv-dialog v-model=\"dialog\" max-width=\"520\"\u003e\n      \u003cv-card\u003e\n        \u003cv-card-title class=\"text-h6\"\u003eПуск частотника на 5 секунд\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          Запустить ПЧ вперед на \u003cb\u003e5 секунд\u003c/b\u003e с уставкой \u003cb\u003e5 Гц\u003c/b\u003e?\u003cbr\u003eВ мастер будет отправлена команда \u003ccode\u003eVFD RUN5 5 FWD\u003c/code\u003e.\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003eОтмена\u003c/v-btn\u003e\n          \u003cv-btn color=\"warning\" variant=\"flat\" @click=\"startRun5\"\u003eЗапустить\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            dialog: false\n        }\n    },\n    methods: {\n        startRun5() {\n            this.dialog = false\n            this.send({ payload: \u0027VFD RUN5 5 FWD\u0027 })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.vfd-run5-widget {\n    width: 100%;\n}\n.vfd-run5-widget .v-btn {\n    width: 100%;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  460,
+        "y":  560,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_tpl_master_vfd_run35",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "page":  "",
+        "ui":  "",
+        "name":  "ПЧ ход 35 см",
+        "order":  9,
+        "width":  "2",
+        "height":  "1",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"vfd-run35-widget\"\u003e\n    \u003cv-btn color=\"success\" variant=\"flat\" block @click=\"dialog = true\"\u003e\n      ПЧ 35 см\n    \u003c/v-btn\u003e\n    \u003cv-dialog v-model=\"dialog\" max-width=\"520\"\u003e\n      \u003cv-card\u003e\n        \u003cv-card-title class=\"text-h6\"\u003eПеремещение частотником на 35 см\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          Запустить ПЧ вперед на \u003cb\u003e35 см\u003c/b\u003e с уставкой \u003cb\u003e5 Гц\u003c/b\u003e?\u003cbr\u003eВ мастер будет отправлена команда \u003ccode\u003eVFD RUN35 5 FWD\u003c/code\u003e.\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003eОтмена\u003c/v-btn\u003e\n          \u003cv-btn color=\"success\" variant=\"flat\" @click=\"startRun35\"\u003eЗапустить\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            dialog: false\n        }\n    },\n    methods: {\n        startRun35() {\n            this.dialog = false\n            this.send({ payload: \u0027VFD RUN35 5 FWD\u0027 })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.vfd-run35-widget {\n    width: 100%;\n}\n.vfd-run35-widget .v-btn {\n    width: 100%;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  470,
+        "y":  600,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "inject_master_status_ping",
+        "type":  "inject",
+        "z":  "tab_master_mqtt",
+        "name":  "Запрос статуса вручную",
+        "props":  [
+                      {
+                          "p":  "payload"
+                      }
+                  ],
+        "repeat":  "",
+        "crontab":  "",
+        "once":  false,
+        "onceDelay":  "1",
+        "topic":  "",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "x":  180,
+        "y":  300,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_lastcmd",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  4,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Последняя команда",
+        "label":  "Команда",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  14,
+        "color":  "#37474f",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  670,
+        "y":  220,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_in_master_resp",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "name":  "Ответы мастера JSON",
+        "topic":  "fyl/master_com12/resp",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  180,
+        "y":  260,
+        "wires":  [
+                      [
+                          "fn_master_resp_parse",
+                          "debug_master_resp",
+                          "fn_common_cycle_dashboard"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_master_resp_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "Разбор ответа мастера",
+        "func":  "let p = msg.payload;\nif (typeof p === \"string\") {\n  try { p = JSON.parse(p); } catch (e) {\n    return { payload: `Ответ: ${msg.payload}` };\n  }\n}\nif (!p || typeof p !== \"object\") {\n  return { payload: \"Ответ: некорректный формат\" };\n}\nconst seq = (p.seq !== undefined) ? p.seq : \"-\";\nconst cmd = p.cmd ? p.cmd : \"-\";\nconst accepted = !!p.accepted;\nconst result = p.result ? p.result : \"-\";\nconst state = accepted ? \"ОК\" : \"ОШИБКА\";\nmsg.payload = `#${seq} | ${state} | ${cmd} | ${result}`;\nreturn msg;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  410,
+        "y":  260,
+        "wires":  [
+                      [
+                          "ui_txt_master_resp",
+                          "mqtt_out_master_trace",
+                          "ui_txt_conveyor_resp",
+                          "ui_txt_manip_resp"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_resp",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  5,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Ответ контроллера",
+        "label":  "Ответ",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  14,
+        "color":  "#1b5e20",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  670,
+        "y":  260,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_master_resp",
+        "type":  "debug",
+        "z":  "tab_master_mqtt",
+        "name":  "Отладка ответа мастера",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  false,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  420,
+        "y":  320,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_out_master_trace",
+        "type":  "mqtt out",
+        "z":  "tab_master_mqtt",
+        "name":  "Трассировка UI мастера",
+        "topic":  "fyl/master_com12/ui_trace",
+        "qos":  "0",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  970,
+        "y":  250,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_page_rs485",
+        "type":  "ui-page",
+        "name":  "Устройства шины",
+        "ui":  "ui_base_conveyor",
+        "path":  "/rs485",
+        "icon":  "lan",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "px":  0,
+                                "name":  "Default",
+                                "cols":  3
+                            },
+                            {
+                                "px":  576,
+                                "name":  "Tablet",
+                                "cols":  6
+                            },
+                            {
+                                "px":  768,
+                                "name":  "Small Desktop",
+                                "cols":  9
+                            },
+                            {
+                                "px":  1024,
+                                "name":  "Desktop",
+                                "cols":  12
+                            }
+                        ],
+        "order":  3,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_rs485_overview",
+        "type":  "ui-group",
+        "name":  "Обзор шины",
+        "page":  "ui_page_rs485",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_rs485_cmd",
+        "type":  "ui-group",
+        "name":  "Команды шины",
+        "page":  "ui_page_rs485",
+        "width":  "6",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_rs485_devices",
+        "type":  "ui-group",
+        "name":  "Состояние устройств",
+        "page":  "ui_page_rs485",
+        "width":  "6",
+        "height":  "1",
+        "order":  2,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_txt_rs485_scan",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_overview",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Сканер",
+        "label":  "ПЧ (11)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  16,
+        "color":  "#00897b",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  760,
+        "y":  620,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_rs485_online",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_overview",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Онлайн устройства",
+        "label":  "Конвейер (12)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  15,
+        "color":  "#2c3e50",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  770,
+        "y":  660,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_rs485_devices",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_devices",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "Список",
+        "label":  "Манипулятор (13)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  14,
+        "color":  "#37474f",
+        "wrapText":  true,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  770,
+        "y":  700,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "fn_rs485_status_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "Разбор статуса устройств",
+        "func":  "let p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) return null;\nconst devices = p.devices || {};\nconst vfd = devices.vfd || {};\nconst conveyor = devices.conveyor || {};\nconst manipulator = devices.manipulator || {};\nconst vfdLine = `ПЧ: ${vfd.online ? \u0027в сети\u0027 : \u0027не в сети\u0027} | статус=${vfd.status_word ?? \u0027-\u0027} | частота=${vfd.run_hz ?? 0} Гц | авария=${vfd.fault ?? 0}`;\nconst conveyorLine = `Конвейер: ${conveyor.online ? \u0027в сети\u0027 : \u0027не в сети\u0027} | протокол=${conveyor.kind_ok ? \u0027норма\u0027 : \u0027ошибка\u0027} | статус=${conveyor.status_word ?? \u0027-\u0027} | ошибка=${conveyor.error_word ?? \u0027-\u0027} | флаг=${conveyor.flag_state ?? \u0027-\u0027} | движение=${conveyor.motion_state ?? \u0027-\u0027}`;\nconst manipulatorLine = `Манипулятор: ${manipulator.online ? \u0027в сети\u0027 : \u0027не в сети\u0027} | протокол=${manipulator.kind_ok ? \u0027норма\u0027 : \u0027ошибка\u0027} | статус=${manipulator.status_word ?? \u0027-\u0027} | ошибка=${manipulator.error_word ?? \u0027-\u0027} | режим=${manipulator.mode ?? \u0027-\u0027} | задача=${manipulator.job ?? \u0027-\u0027} | датчики=${manipulator.sensor_bits ?? \u0027-\u0027} | конфликты=${manipulator.conflict_bits ?? \u0027-\u0027}`;\nreturn [{ payload: vfdLine }, { payload: conveyorLine }, { payload: manipulatorLine }];",
+        "outputs":  3,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  430,
+        "y":  660,
+        "wires":  [
+                      [
+                          "ui_txt_rs485_scan"
+                      ],
+                      [
+                          "ui_txt_rs485_online"
+                      ],
+                      [
+                          "ui_txt_rs485_devices"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_refresh",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "Обновить",
+        "label":  "Обновить",
+        "order":  1,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1565c0",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  760,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_status",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "Статус сканера",
+        "label":  "Сканер",
+        "order":  2,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#5d4037",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  800,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_on",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "Сканер вкл",
+        "label":  "Сканер вкл",
+        "order":  3,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN ON",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#2e7d32",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  840,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_off",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "Сканер выкл",
+        "label":  "Сканер выкл",
+        "order":  4,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN OFF",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#c62828",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  880,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_range",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "Диапазон сканера",
+        "label":  "Диапазон 11-13",
+        "order":  5,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN RANGE 11 13",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#00897b",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  920,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_now",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "Опрос сейчас",
+        "label":  "Опрос сейчас",
+        "order":  6,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN NOW",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  960,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_conveyor_resp",
+        "type":  "ui-text",
+        "label":  "Ответ",
+        "height":  "1",
+        "valueType":  "msg",
+        "color":  "#1b5e20",
+        "group":  "ui_group_manual",
+        "fontSize":  14,
+        "format":  "{{msg.payload}}",
+        "order":  4,
+        "layout":  "row-spread",
+        "font":  "Helvetica",
+        "value":  "msg.payload",
+        "wrapText":  true,
+        "name":  "Ответ конвейера",
+        "style":  true,
+        "className":  "",
+        "z":  "tab_conveyor_monitor",
+        "width":  "6"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV 1",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  5,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_prog1",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Программа 1",
+        "buttonColor":  "#1565c0",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Конвейер программа 1",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV 2",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  6,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_cycle2",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Цикл 2",
+        "buttonColor":  "#00897b",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Конвейер цикл 2",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV 3",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  7,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_prog3",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Позиция 3",
+        "buttonColor":  "#6a1b9a",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Конвейер позиция 3",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV C",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  8,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_shift_c",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Сдвиг C",
+        "buttonColor":  "#ef6c00",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Конвейер сдвиг C",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV Z",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  9,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_shift_z",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Возврат Z",
+        "buttonColor":  "#c62828",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Конвейер возврат Z",
+        "group":  "ui_group_manual"
+    },
+    {
+        "id":  "0c8d7f16bd7ce401",
+        "type":  "ui-template",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_manual",
+        "page":  "",
+        "ui":  "",
+        "name":  "Калибровка каретки CZ",
+        "order":  10,
+        "width":  "6",
+        "height":  "1",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"conv-cz-calibration\"\u003e\n    \u003cv-btn color=\"warning\" variant=\"flat\" block @click=\"dialog = true\"\u003e\n      Калибровка каретки\n    \u003c/v-btn\u003e\n    \u003cv-dialog v-model=\"dialog\" max-width=\"520\"\u003e\n      \u003cv-card\u003e\n        \u003cv-card-title class=\"text-h6\"\u003eПодтверждение калибровки\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          Запустить калибровку каретки командой \u003ccode\u003eCONV CZ\u003c/code\u003e?\u003cbr\u003eКаретка пройдет поиск краев Z и C. Убедитесь, что зона свободна.\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003eОтмена\u003c/v-btn\u003e\n          \u003cv-btn color=\"warning\" variant=\"flat\" @click=\"confirmCalibration\"\u003eЗапустить\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            dialog: false\n        }\n    },\n    methods: {\n        confirmCalibration() {\n            this.dialog = false\n            this.send({ payload: \u0027CONV CZ\u0027 })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.conv-cz-calibration {\n    width: 100%;\n}\n.conv-cz-calibration .v-btn {\n    width: 100%;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  430,
+        "y":  740,
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_page_manipulator",
+        "ui":  "ui_base_conveyor",
+        "visible":  "true",
+        "name":  "Манипулятор",
+        "type":  "ui-page",
+        "disabled":  "false",
+        "className":  "",
+        "order":  4,
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "path":  "/manipulator",
+        "icon":  "precision_manufacturing",
+        "breakpoints":  [
+                            {
+                                "px":  0,
+                                "name":  "Default",
+                                "cols":  3
+                            },
+                            {
+                                "px":  576,
+                                "name":  "Tablet",
+                                "cols":  6
+                            },
+                            {
+                                "px":  768,
+                                "name":  "Small Desktop",
+                                "cols":  9
+                            },
+                            {
+                                "px":  1024,
+                                "name":  "Desktop",
+                                "cols":  12
+                            }
+                        ]
+    },
+    {
+        "width":  "6",
+        "height":  "1",
+        "id":  "ui_group_man_status",
+        "type":  "ui-group",
+        "visible":  "true",
+        "order":  0,
+        "disabled":  "false",
+        "page":  "ui_page_manipulator",
+        "name":  "Статус манипулятора",
+        "showTitle":  true,
+        "className":  "",
+        "groupType":  "default"
+    },
+    {
+        "width":  "6",
+        "height":  "1",
+        "id":  "ui_group_man_cmd",
+        "type":  "ui-group",
+        "visible":  "true",
+        "order":  1,
+        "disabled":  "false",
+        "page":  "ui_page_manipulator",
+        "name":  "Команды манипулятора",
+        "showTitle":  true,
+        "className":  "",
+        "groupType":  "default"
+    },
+    {
+        "topic":  "fyl/master_com12/status",
+        "id":  "mqtt_in_manip_status",
+        "y":  1040,
+        "nl":  false,
+        "datatype":  "auto-detect",
+        "name":  "Статус манипулятора через мастер",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "inputs":  0,
+        "x":  190,
+        "broker":  "mqtt_broker_master1884",
+        "wires":  [
+                      [
+                          "fn_manip_status"
+                      ]
+                  ],
+        "rap":  true,
+        "qos":  "1",
+        "rh":  0
+    },
+    {
+        "id":  "fn_manip_status",
+        "y":  1040,
+        "initialize":  "",
+        "name":  "Формат статуса манипулятора",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "noerr":  0,
+        "x":  430,
+        "finalize":  "",
+        "wires":  [
+                      [
+                          "ui_txt_manip_status"
+                      ]
+                  ],
+        "timeout":  0,
+        "outputs":  1,
+        "func":  "let p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) return null;\nconst dev = (p.devices \u0026\u0026 p.devices.manipulator) ? p.devices.manipulator : {};\nconst online = dev.online ? \u0027в сети\u0027 : \u0027не в сети\u0027;\nconst proto = dev.kind_ok ? \u0027норма\u0027 : \u0027ошибка\u0027;\nmsg.payload = `Манипулятор: ${online} | протокол=${proto} | статус=${dev.status_word ?? \u0027-\u0027} | ошибка=${dev.error_word ?? \u0027-\u0027} | режим=${dev.mode ?? \u0027-\u0027} | задача=${dev.job ?? \u0027-\u0027} | датчики=${dev.sensor_bits ?? \u0027-\u0027} | конфликты=${dev.conflict_bits ?? \u0027-\u0027}`;\nreturn msg;",
+        "libs":  [
+
+                 ]
+    },
+    {
+        "id":  "ui_txt_manip_status",
+        "type":  "ui-text",
+        "label":  "Манипулятор (13)",
+        "height":  "1",
+        "valueType":  "msg",
+        "color":  "#2c3e50",
+        "group":  "ui_group_man_status",
+        "fontSize":  16,
+        "format":  "{{msg.payload}}",
+        "order":  1,
+        "layout":  "row-spread",
+        "font":  "Helvetica",
+        "value":  "msg.payload",
+        "wrapText":  true,
+        "name":  "Статус манипулятора",
+        "style":  true,
+        "className":  "",
+        "z":  "tab_master_mqtt",
+        "width":  "6"
+    },
+    {
+        "id":  "ui_txt_manip_resp",
+        "type":  "ui-text",
+        "label":  "Ответ",
+        "height":  "1",
+        "valueType":  "msg",
+        "color":  "#1b5e20",
+        "group":  "ui_group_man_status",
+        "fontSize":  14,
+        "format":  "{{msg.payload}}",
+        "order":  2,
+        "layout":  "row-spread",
+        "font":  "Helvetica",
+        "value":  "msg.payload",
+        "wrapText":  true,
+        "name":  "Ответ манипулятора",
+        "style":  true,
+        "className":  "",
+        "z":  "tab_master_mqtt",
+        "width":  "6"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN W",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  3,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_up",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Вверх",
+        "buttonColor":  "#1565c0",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Манипулятор вверх",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN S",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  4,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_down",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Вниз",
+        "buttonColor":  "#1565c0",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Манипулятор вниз",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN A",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  5,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_left",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Влево",
+        "buttonColor":  "#00897b",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Манипулятор влево",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN D",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  6,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_right",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Вправо",
+        "buttonColor":  "#00897b",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Манипулятор вправо",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN Q",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  7,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_open",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Захват открыть",
+        "buttonColor":  "#2e7d32",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Захват открыть",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN E",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  8,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_close",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Захват закрыть",
+        "buttonColor":  "#2e7d32",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Захват закрыть",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN R",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  9,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_run",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Рабочий цикл",
+        "buttonColor":  "#ef6c00",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Манипулятор рабочий цикл",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN Z",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  10,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_stop",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "Стоп",
+        "buttonColor":  "#c62828",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "Манипулятор стоп",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "id":  "ui_tpl_man_calibration_k",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_man_cmd",
+        "page":  "",
+        "ui":  "",
+        "name":  "Калибровка расстояния K",
+        "order":  11,
+        "width":  "6",
+        "height":  "1",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"man-k-calibration-widget\"\u003e\n    \u003cv-btn color=\"warning\" variant=\"flat\" block @click=\"dialog = true\"\u003e\n      Калибровка каретки\n    \u003c/v-btn\u003e\n    \u003cv-dialog v-model=\"dialog\" max-width=\"560\"\u003e\n      \u003cv-card\u003e\n        \u003cv-card-title class=\"text-h6\"\u003eПодтверждение калибровки\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          Запустить калибровку расстояния манипулятора командой \u003ccode\u003eMAN KWEB\u003c/code\u003e?\u003cbr\u003eЭто web-вариант команды \u003ccode\u003eK/k\u003c/code\u003e без ожидания ответа \u003ccode\u003eY/N\u003c/code\u003e в мониторе порта. Убедитесь, что зона движения свободна.\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003eОтмена\u003c/v-btn\u003e\n          \u003cv-btn color=\"warning\" variant=\"flat\" @click=\"confirmCalibration\"\u003eЗапустить\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            dialog: false\n        }\n    },\n    methods: {\n        confirmCalibration() {\n            this.dialog = false\n            this.send({ payload: \u0027MAN KWEB\u0027 })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.man-k-calibration-widget {\n    width: 100%;\n}\n.man-k-calibration-widget .v-btn {\n    width: 100%;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  470,
+        "y":  1220,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_manual_otvod_dispatch",
+        "type":  "function",
+        "z":  "tab_conveyor_monitor",
+        "name":  "Наладка отвода: диспетчер",
+        "func":  "const payload = msg.payload;\nif (typeof payload === \u0027string\u0027) {\n    return msg;\n}\nconst data = (payload \u0026\u0026 typeof payload === \u0027object\u0027) ? payload : {};\nconst action = String(data.action || \u0027\u0027).trim().toLowerCase();\nconst rawSteps = Number(data.steps);\nconst rawCm = Number(data.cm);\nconst steps = Number.isFinite(rawSteps) \u0026\u0026 rawSteps \u003e 0 ? Math.round(rawSteps) : 920;\nconst cm = Number.isFinite(rawCm) \u0026\u0026 rawCm \u003e 0 ? Math.round(rawCm * 10) / 10 : 43;\nconst cmToken = Number.isInteger(cm) ? String(cm) : cm.toFixed(1);\nconst otvodMsg = { payload: `CONV OTVOD ${steps}` };\nconst vfdMsg = { payload: `VFD RUNCM ${cmToken} 5 FWD` };\nconst seqMsg = { payload: `OTCYCLE START 1 ${steps} ${cmToken}` };\nconst cycleMsg = { payload: `OTCYCLE START 3 ${steps} ${cmToken}` };\nif (action === \u0027otvod\u0027) {\n    return otvodMsg;\n}\nif (action === \u0027vfd\u0027) {\n    return vfdMsg;\n}\nif (action === \u0027sequence\u0027) {\n    node.status({ fill: \u0027yellow\u0027, shape: \u0027dot\u0027, text: seqMsg.payload });\n    return seqMsg;\n}\nif (action === \u0027cycle3\u0027) {\n    node.status({ fill: \u0027green\u0027, shape: \u0027dot\u0027, text: cycleMsg.payload });\n    return cycleMsg;\n}\nnode.status({ fill: \u0027red\u0027, shape: \u0027ring\u0027, text: \u0027unknown action\u0027 });\nreturn null;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  870,
+        "y":  200,
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_page_zapaika",
+        "type":  "ui-page",
+        "name":  "Запайщик",
+        "ui":  "ui_base_conveyor",
+        "path":  "/zapaika",
+        "icon":  "radio_button_checked",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ],
+        "order":  5,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_zapaika_main",
+        "type":  "ui-group",
+        "name":  "Управление запайщиком",
+        "page":  "ui_page_zapaika",
+        "width":  "6",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_in_zapaika_status",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "name":  "Seal status MQTT",
+        "topic":  "fyl/test_zapaika/status",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  170,
+        "y":  1260,
+        "wires":  [
+                      [
+                          "fn_zapaika_status_parse"
+                      ]
+                  ]
+    },
+    {
+        "id":  "mqtt_out_zapaika_cmd",
+        "type":  "mqtt out",
+        "z":  "tab_master_mqtt",
+        "name":  "Seal cmd MQTT",
+        "topic":  "fyl/test_zapaika/cmd",
+        "qos":  "1",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  760,
+        "y":  1240,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "inject_zapaika_status_poll",
+        "type":  "inject",
+        "z":  "tab_master_mqtt",
+        "name":  "Seal STATUS poll",
+        "props":  [
+                      {
+                          "p":  "payload"
+                      }
+                  ],
+        "repeat":  "10",
+        "crontab":  "",
+        "once":  true,
+        "onceDelay":  "2",
+        "topic":  "",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "x":  470,
+        "y":  1180,
+        "wires":  [
+                      [
+                          "mqtt_out_zapaika_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_zapaika_status_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "Статус запайщика",
+        "func":  "const OFFLINE_AFTER_MS = 7000;\n\nlet p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) {\n  return null;\n}\n\nfunction buildView(src, online) {\n  let state = \u0027Нет связи\u0027;\n  let color = \u0027#9e9e9e\u0027;\n\n  if (online \u0026\u0026 src.start_out) {\n    state = \u0027Импульс пуска\u0027;\n    color = \u0027#ff9800\u0027;\n  } else if (online \u0026\u0026 src.cycle_running) {\n    state = \u0027Цикл идет\u0027;\n    color = \u0027#1e88e5\u0027;\n  } else if (online \u0026\u0026 src.done_active) {\n    state = \u0027Цикл завершен\u0027;\n    color = \u0027#43a047\u0027;\n  } else if (online) {\n    state = \u0027Готов\u0027;\n    color = \u0027#90a4ae\u0027;\n  }\n\n  return {\n    online: online,\n    online_text: online ? \u0027В сети\u0027 : \u0027Не в сети\u0027,\n    state: state,\n    color: color,\n    ip: src.ip || \u0027-\u0027,\n    fw: src.fw || \u0027-\u0027,\n    start_out: !!src.start_out,\n    done_active: !!src.done_active,\n    cycle_running: !!src.cycle_running,\n    done_count: Number(src.done_count || 0),\n    last_result: src.last_result || \u0027-\u0027\n  };\n}\n\nconst source = {\n  ip: p.ip || \u0027-\u0027,\n  fw: p.fw || \u0027-\u0027,\n  start_out: !!p.start_out,\n  done_active: !!p.done_active,\n  cycle_running: !!p.cycle_running,\n  done_count: Number(p.done_count || 0),\n  last_result: p.last_result || \u0027-\u0027\n};\n\nconst prevTimer = context.get(\u0027offlineTimer\u0027);\nif (prevTimer) {\n  clearTimeout(prevTimer);\n}\n\nconst offlinePayload = buildView(source, false);\nconst timer = setTimeout(() =\u003e {\n  node.send({ payload: offlinePayload });\n}, OFFLINE_AFTER_MS);\n\ncontext.set(\u0027offlineTimer\u0027, timer);\nmsg.payload = buildView(source, true);\nreturn msg;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "const timer = context.get(\u0027offlineTimer\u0027);\nif (timer) {\n  clearTimeout(timer);\n  context.set(\u0027offlineTimer\u0027, null);\n}",
+        "libs":  [
+
+                 ],
+        "x":  410,
+        "y":  1260,
+        "wires":  [
+                      [
+                          "ui_tpl_zapaika_status"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_zapaika_start",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_zapaika_main",
+        "name":  "Пуск запайщика",
+        "label":  "Пуск запайщика",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "START",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1fa84a",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  1220,
+        "wires":  [
+                      [
+                          "mqtt_out_zapaika_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_tpl_zapaika_status",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_zapaika_main",
+        "page":  "",
+        "ui":  "",
+        "name":  "Статус запайщика",
+        "order":  2,
+        "width":  "6",
+        "height":  "3",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"seal-card\"\u003e\n    \u003cdiv class=\"seal-top\"\u003e\n      \u003cdiv class=\"seal-lamp\" :style=\"{ backgroundColor: (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.color) ? msg.payload.color : \u0027#9e9e9e\u0027 }\"\u003e\u003c/div\u003e\n      \u003cdiv class=\"seal-block\"\u003e\n        \u003cdiv class=\"seal-title\"\u003e{{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.state) ? msg.payload.state : \u0027Нет связи\u0027 }}\u003c/div\u003e\n        \u003cdiv class=\"seal-line\"\u003eСвязь: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.online_text) ? msg.payload.online_text : \u0027Не в сети\u0027 }}\u003c/div\u003e\n        \u003cdiv class=\"seal-line\"\u003eIP: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.ip) ? msg.payload.ip : \u0027-\u0027 }} | FW: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.fw) ? msg.payload.fw : \u0027-\u0027 }}\u003c/div\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n    \u003cdiv class=\"seal-line\"\u003eDONE: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.done_active) ? \u0027ACTIVE\u0027 : \u0027idle\u0027 }} | START: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.start_out) ? \u0027ON\u0027 : \u0027OFF\u0027 }} | Циклов: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.done_count !== \u0027undefined\u0027) ? msg.payload.done_count : 0 }}\u003c/div\u003e\n    \u003cdiv class=\"seal-line seal-line--ellipsis\" :title=\"(msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.last_result) ? msg.payload.last_result : \u0027-\u0027\"\u003eПоследнее: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.last_result) ? msg.payload.last_result : \u0027-\u0027 }}\u003c/div\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cstyle\u003e\n.seal-card {\n  width: 100%;\n  height: 100%;\n  padding: 10px 12px;\n  box-sizing: border-box;\n  border: 1px solid #d0d7de;\n  background: #f8fbfd;\n  overflow: hidden;\n}\n.seal-top {\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  margin-bottom: 10px;\n}\n.seal-lamp {\n  width: 28px;\n  height: 28px;\n  min-width: 28px;\n  border-radius: 50%;\n  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);\n}\n.seal-block {\n  min-width: 0;\n}\n.seal-title {\n  font-size: 18px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n.seal-line {\n  margin-top: 4px;\n  font-size: 14px;\n  line-height: 1.3;\n  color: #38474f;\n  word-break: break-word;\n}\n.seal-line--ellipsis {\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  690,
+        "y":  1280,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_page_common_cycle",
+        "type":  "ui-page",
+        "name":  "Общий цикл",
+        "ui":  "ui_base_conveyor",
+        "path":  "/common-cycle",
+        "icon":  "hub",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ],
+        "order":  6,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_common_cycle_ctrl",
+        "type":  "ui-group",
+        "name":  "Управление общим циклом",
+        "page":  "ui_page_common_cycle",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_common_cycle_status",
+        "type":  "ui-group",
+        "name":  "Состояние конструкции",
+        "page":  "ui_page_common_cycle",
+        "width":  "6",
+        "height":  "1",
+        "order":  2,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_common_cycle_log",
+        "type":  "ui-group",
+        "name":  "Ход выполнения",
+        "page":  "ui_page_common_cycle",
+        "width":  "12",
+        "height":  "1",
+        "order":  3,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_btn_common_cycle_start_page",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_common_cycle_ctrl",
+        "name":  "Общий цикл старт",
+        "label":  "Общий цикл: старт",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "COMMON START",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#2e7d32",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  460,
+        "y":  1460,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_common_cycle_pause_page",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_common_cycle_ctrl",
+        "name":  "Общий цикл пауза",
+        "label":  "Общий цикл: пауза",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "COMMON PAUSE",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  470,
+        "y":  1500,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_common_cycle_clear_log",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_common_cycle_ctrl",
+        "name":  "Очистить лог общего цикла",
+        "label":  "Очистить лог",
+        "order":  3,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "{\"action\":\"clear_log\"}",
+        "payloadType":  "json",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#607d8b",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  490,
+        "y":  1540,
+        "wires":  [
+                      [
+                          "fn_common_cycle_dashboard"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_common_cycle_dashboard",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "Общий цикл: статус и лог",
+        "func":  "const LOG_LIMIT = 80;\n\nfunction parsePayload(src) {\n    if (typeof src === \u0027string\u0027) {\n        try {\n            return JSON.parse(src);\n        } catch (e) {\n            return null;\n        }\n    }\n    return (src \u0026\u0026 typeof src === \u0027object\u0027) ? src : null;\n}\n\nfunction stageLabel(stage) {\n    switch (String(stage || \u0027idle\u0027)) {\n        case \u0027wait_initial_batch\u0027: return \u0027Ждем первую партию\u0027;\n        case \u0027wait_manip_ready\u0027: return \u0027Готовим манипулятор\u0027;\n        case \u0027wait_manip_step7\u0027: return \u0027Манипулятор идет к шагу 7\u0027;\n        case \u0027wait_next_batch\u0027: return \u0027Ждем новую партию и окончание параллельных процессов\u0027;\n        case \u0027idle\u0027: return \u0027Ожидание\u0027;\n        default: return stage || \u0027Ожидание\u0027;\n    }\n}\n\nfunction yesNo(value, yes = \u0027да\u0027, no = \u0027нет\u0027) {\n    return value ? yes : no;\n}\n\nfunction onlineText(value) {\n    return value ? \u0027в сети\u0027 : \u0027нет связи\u0027;\n}\n\nfunction pushLog(lines, text) {\n    const line = String(text || \u0027\u0027).trim();\n    if (!line) {\n        return;\n    }\n    const stamp = new Date().toLocaleTimeString(\u0027ru-RU\u0027, { hour12: false });\n    const entry = `[${stamp}] ${line}`;\n    if (lines[lines.length - 1] !== entry) {\n        lines.push(entry);\n    }\n    while (lines.length \u003e LOG_LIMIT) {\n        lines.shift();\n    }\n}\n\nlet logs = context.get(\u0027commonCycleLogs\u0027) || [];\nlet snapshot = context.get(\u0027commonCycleSnapshot\u0027) || null;\n\nconst payload = msg.payload;\nif (payload \u0026\u0026 typeof payload === \u0027object\u0027 \u0026\u0026 payload.action === \u0027clear_log\u0027) {\n    logs = [];\n    context.set(\u0027commonCycleLogs\u0027, logs);\n    return [null, { payload: { text: \u0027Лог очищен.\u0027, count: 0 } }];\n}\n\nif (msg.topic === \u0027fyl/master_com12/resp\u0027) {\n    const resp = parsePayload(payload);\n    if (!resp) {\n        return null;\n    }\n    const state = resp.accepted ? \u0027OK\u0027 : \u0027ОШИБКА\u0027;\n    pushLog(logs, `Команда #${resp.seq ?? \u0027-\u0027}: ${resp.cmd || \u0027-\u0027} -\u003e ${state} | ${resp.result || \u0027-\u0027}`);\n    context.set(\u0027commonCycleLogs\u0027, logs);\n    return [null, { payload: { text: logs.slice().reverse().join(\u0027\\n\u0027), count: logs.length } }];\n}\n\nconst p = parsePayload(payload);\nif (!p) {\n    return null;\n}\n\nconst cc = p.common_cycle || {};\nconst ot = p.otvod_cycle || {};\nconst seal = p.seal || {};\nconst devices = p.devices || {};\nconst conv = devices.conveyor || {};\nconst man = devices.manipulator || {};\nconst vfd = devices.vfd || {};\n\nif (!snapshot) {\n    pushLog(logs, \u0027Монитор общего цикла подключен.\u0027);\n}\n\nif (!snapshot || !!cc.active !== snapshot.ccActive) {\n    pushLog(logs, cc.active ? \u0027Общий цикл активен.\u0027 : \u0027Общий цикл остановлен.\u0027);\n}\nif (!snapshot || !!cc.pause !== snapshot.ccPause) {\n    if (cc.pause) {\n        pushLog(logs, \u0027Общий цикл: запрошена мягкая пауза.\u0027);\n    } else if (snapshot) {\n        pushLog(logs, \u0027Общий цикл: пауза снята.\u0027);\n    }\n}\nif (!snapshot || String(cc.stage || \u0027idle\u0027) !== snapshot.ccStage) {\n    pushLog(logs, `Этап общего цикла: ${stageLabel(cc.stage)}`);\n}\nif (cc.last \u0026\u0026 (!snapshot || cc.last !== snapshot.ccLast) \u0026\u0026 cc.last !== \u0027idle\u0027) {\n    pushLog(logs, cc.last);\n}\nif (!snapshot || !!conv.online !== snapshot.convOnline) {\n    pushLog(logs, `Конвейер: ${onlineText(!!conv.online)}.`);\n}\nif (!snapshot || !!man.online !== snapshot.manOnline) {\n    pushLog(logs, `Манипулятор: ${onlineText(!!man.online)}.`);\n}\nif (!snapshot || !!vfd.online !== snapshot.vfdOnline) {\n    pushLog(logs, `Основной отводной / ПЧ: ${onlineText(!!vfd.online)}.`);\n}\nif ((!snapshot || Number(conv.batch_seq || 0) !== snapshot.batchSeq) \u0026\u0026 Number(conv.batch_seq || 0) \u003e 0) {\n    pushLog(logs, `Подводной: готова партия #${conv.batch_seq}.`);\n}\nif ((!snapshot || !!conv.batch_ready !== snapshot.batchReady) \u0026\u0026 !!conv.batch_ready) {\n    pushLog(logs, \u0027Подводной: партия готова для манипулятора.\u0027);\n}\nif ((!snapshot || Number(man.work_step || 0) !== snapshot.manStep) \u0026\u0026 Number(man.work_step || 0) \u003e 0) {\n    pushLog(logs, `Манипулятор: шаг ${man.work_step}.`);\n}\nif ((!snapshot || !!man.step7_ready !== snapshot.step7Ready) \u0026\u0026 !!man.step7_ready) {\n    pushLog(logs, \u0027Манипулятор: достигнут шаг 7.\u0027);\n}\nif (ot.last \u0026\u0026 (!snapshot || ot.last !== snapshot.otLast) \u0026\u0026 ot.last !== \u0027idle\u0027) {\n    pushLog(logs, ot.last);\n}\nif ((!snapshot || !!seal.start_out !== snapshot.sealStart) \u0026\u0026 !!seal.start_out) {\n    pushLog(logs, \u0027Запайщик: импульс пуска подан.\u0027);\n}\nif ((!snapshot || !!seal.done !== snapshot.sealDone) \u0026\u0026 !!seal.done) {\n    pushLog(logs, \u0027Запайщик: цикл завершен.\u0027);\n}\n\nsnapshot = {\n    ccActive: !!cc.active,\n    ccPause: !!cc.pause,\n    ccStage: String(cc.stage || \u0027idle\u0027),\n    ccLast: String(cc.last || \u0027\u0027),\n    convOnline: !!conv.online,\n    manOnline: !!man.online,\n    vfdOnline: !!vfd.online,\n    batchSeq: Number(conv.batch_seq || 0),\n    batchReady: !!conv.batch_ready,\n    manStep: Number(man.work_step || 0),\n    step7Ready: !!man.step7_ready,\n    otLast: String(ot.last || \u0027\u0027),\n    sealStart: !!seal.start_out,\n    sealDone: !!seal.done\n};\ncontext.set(\u0027commonCycleSnapshot\u0027, snapshot);\ncontext.set(\u0027commonCycleLogs\u0027, logs);\n\nconst state = cc.active ? (cc.pause ? \u0027Пауза после безопасной точки\u0027 : \u0027Общий цикл активен\u0027) : \u0027Остановлен\u0027;\nconst color = cc.active ? (cc.pause ? \u0027#ef6c00\u0027 : \u0027#2e7d32\u0027) : \u0027#90a4ae\u0027;\n\nreturn [\n    {\n        payload: {\n            state,\n            color,\n            stage: stageLabel(cc.stage),\n            last: cc.last || \u0027-\u0027,\n            wifi: yesNo(!!p.wifi, \u0027подключен\u0027, \u0027нет\u0027),\n            ip: p.ip || \u0027-\u0027,\n            conveyor: onlineText(!!conv.online),\n            manipulator: onlineText(!!man.online),\n            vfd: onlineText(!!vfd.online),\n            batch_seq: Number(conv.batch_seq || 0),\n            batch_ready: yesNo(!!conv.batch_ready),\n            program_state: Number(conv.program_state || 0),\n            program_pass: Number(conv.program_pass || 0),\n            manip_step: Number(man.work_step || 0),\n            step7_ready: yesNo(!!man.step7_ready),\n            ot_active: yesNo(!!ot.active),\n            ot_ready: yesNo(!!ot.ready),\n            ot_step_done: Number(ot.step_done || 0),\n            ot_vfd_done: Number(ot.vfd_done || 0),\n            seal_start: yesNo(!!seal.start_out),\n            seal_done: yesNo(!!seal.done),\n            manip_starts: Number(cc.manip_starts || 0),\n            parallel_starts: Number(cc.parallel_starts || 0)\n        }\n    },\n    {\n        payload: {\n            text: logs.slice().reverse().join(\u0027\\n\u0027),\n            count: logs.length\n        }\n    }\n];",
+        "outputs":  2,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  470,
+        "y":  1600,
+        "wires":  [
+                      [
+                          "ui_tpl_common_cycle_status"
+                      ],
+                      [
+                          "ui_tpl_common_cycle_log"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_tpl_common_cycle_status",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_common_cycle_status",
+        "page":  "",
+        "ui":  "",
+        "name":  "Статус общего цикла",
+        "order":  1,
+        "width":  "6",
+        "height":  "5",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"common-card\"\u003e\n    \u003cdiv class=\"common-top\"\u003e\n      \u003cdiv class=\"common-lamp\" :style=\"{ backgroundColor: (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.color) ? msg.payload.color : \u0027#9e9e9e\u0027 }\"\u003e\u003c/div\u003e\n      \u003cdiv class=\"common-head\"\u003e\n        \u003cdiv class=\"common-title\"\u003e{{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.state) ? msg.payload.state : \u0027Нет данных\u0027 }}\u003c/div\u003e\n        \u003cdiv class=\"common-line\"\u003eЭтап: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.stage) ? msg.payload.stage : \u0027-\u0027 }}\u003c/div\u003e\n        \u003cdiv class=\"common-line\"\u003eWi-Fi: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.wifi) ? msg.payload.wifi : \u0027-\u0027 }} | IP: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.ip) ? msg.payload.ip : \u0027-\u0027 }}\u003c/div\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n    \u003cdiv class=\"common-line common-last\"\u003eПоследнее: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.last) ? msg.payload.last : \u0027-\u0027 }}\u003c/div\u003e\n    \u003cdiv class=\"common-grid\"\u003e\n      \u003cdiv class=\"common-item\"\u003eКонвейер: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.conveyor) ? msg.payload.conveyor : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eМанипулятор: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.manipulator) ? msg.payload.manipulator : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eПЧ: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.vfd) ? msg.payload.vfd : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eПартия: #{{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.batch_seq !== \u0027undefined\u0027) ? msg.payload.batch_seq : 0 }} | готова: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.batch_ready) ? msg.payload.batch_ready : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eProgram 1: state={{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.program_state !== \u0027undefined\u0027) ? msg.payload.program_state : 0 }} | pass={{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.program_pass !== \u0027undefined\u0027) ? msg.payload.program_pass : 0 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eМанипулятор: шаг {{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.manip_step !== \u0027undefined\u0027) ? msg.payload.manip_step : 0 }} | шаг7={{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.step7_ready) ? msg.payload.step7_ready : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eОтвод: active={{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.ot_active) ? msg.payload.ot_active : \u0027-\u0027 }} | ready={{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.ot_ready) ? msg.payload.ot_ready : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eОтвод: step={{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.ot_step_done !== \u0027undefined\u0027) ? msg.payload.ot_step_done : 0 }} | vfd={{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.ot_vfd_done !== \u0027undefined\u0027) ? msg.payload.ot_vfd_done : 0 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eЗапайщик: start={{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.seal_start) ? msg.payload.seal_start : \u0027-\u0027 }} | done={{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.seal_done) ? msg.payload.seal_done : \u0027-\u0027 }}\u003c/div\u003e\n      \u003cdiv class=\"common-item\"\u003eПуски: manip={{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.manip_starts !== \u0027undefined\u0027) ? msg.payload.manip_starts : 0 }} | parallel={{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.parallel_starts !== \u0027undefined\u0027) ? msg.payload.parallel_starts : 0 }}\u003c/div\u003e\n    \u003c/div\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cstyle\u003e\n.common-card {\n  width: 100%;\n  height: 100%;\n  padding: 10px 12px;\n  box-sizing: border-box;\n  border: 1px solid #d0d7de;\n  background: #f8fbfd;\n}\n.common-top {\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  margin-bottom: 10px;\n}\n.common-lamp {\n  width: 28px;\n  height: 28px;\n  min-width: 28px;\n  border-radius: 50%;\n  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);\n}\n.common-head {\n  min-width: 0;\n}\n.common-title {\n  font-size: 18px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n.common-line {\n  margin-top: 4px;\n  font-size: 14px;\n  line-height: 1.35;\n  color: #38474f;\n  word-break: break-word;\n}\n.common-last {\n  margin-bottom: 10px;\n}\n.common-grid {\n  display: grid;\n  grid-template-columns: 1fr;\n  gap: 6px;\n}\n.common-item {\n  font-size: 14px;\n  line-height: 1.35;\n  color: #243238;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  780,
+        "y":  1580,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_tpl_common_cycle_log",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_common_cycle_log",
+        "page":  "",
+        "ui":  "",
+        "name":  "Лог общего цикла",
+        "order":  1,
+        "width":  "12",
+        "height":  "8",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"common-log-card\"\u003e\n    \u003cdiv class=\"common-log-head\"\u003eСобытия: {{ (msg \u0026\u0026 msg.payload \u0026\u0026 typeof msg.payload.count !== \u0027undefined\u0027) ? msg.payload.count : 0 }}\u003c/div\u003e\n    \u003cpre class=\"common-log-pre\"\u003e{{ (msg \u0026\u0026 msg.payload \u0026\u0026 msg.payload.text) ? msg.payload.text : \u0027Лог пока пуст.\u0027 }}\u003c/pre\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cstyle\u003e\n.common-log-card {\n  width: 100%;\n  height: 100%;\n  padding: 10px 12px;\n  box-sizing: border-box;\n  border: 1px solid #d0d7de;\n  background: #ffffff;\n}\n.common-log-head {\n  margin-bottom: 8px;\n  font-size: 16px;\n  font-weight: 700;\n}\n.common-log-pre {\n  margin: 0;\n  white-space: pre-wrap;\n  word-break: break-word;\n  font-family: Consolas, \u0027Courier New\u0027, monospace;\n  font-size: 13px;\n  line-height: 1.45;\n  color: #243238;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  780,
+        "y":  1620,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_group_common_cycle_sections",
+        "type":  "ui-group",
+        "name":  "Участки и ручные статусы",
+        "page":  "ui_page_common_cycle",
+        "width":  "12",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "fn_common_cycle_sections",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "Общий цикл: участки",
+        "func":  "const OVERRIDE_META = {\n    ok: { label: \u0027Норма\u0027, color: \u0027#2e7d32\u0027 },\n    warn: { label: \u0027Внимание\u0027, color: \u0027#f9a825\u0027 },\n    stop: { label: \u0027Стоп\u0027, color: \u0027#d32f2f\u0027 },\n    pause: { label: \u0027Пауза\u0027, color: \u0027#ef6c00\u0027 }\n};\n\nfunction parsePayload(src) {\n    if (typeof src === \u0027string\u0027) {\n        try {\n            return JSON.parse(src);\n        } catch (e) {\n            return null;\n        }\n    }\n    return (src \u0026\u0026 typeof src === \u0027object\u0027) ? src : null;\n}\n\nfunction stageLabel(stage) {\n    switch (String(stage || \u0027idle\u0027)) {\n        case \u0027wait_initial_batch\u0027: return \u0027Ждем первую партию\u0027;\n        case \u0027wait_manip_ready\u0027: return \u0027Готовим манипулятор\u0027;\n        case \u0027wait_manip_step7\u0027: return \u0027Манипулятор идет к шагу 7\u0027;\n        case \u0027wait_next_batch\u0027: return \u0027Ждем новую партию и окончание параллельных процессов\u0027;\n        case \u0027idle\u0027: return \u0027Ожидание\u0027;\n        default: return stage || \u0027Ожидание\u0027;\n    }\n}\n\nlet overrides = context.get(\u0027sectionOverrides\u0027) || {};\nlet lastStatus = context.get(\u0027sectionLastStatus\u0027) || null;\n\nconst payload = msg.payload;\nif (msg.topic === \u0027fyl/master_com12/status\u0027) {\n    const parsed = parsePayload(payload);\n    if (!parsed) {\n        return null;\n    }\n    lastStatus = parsed;\n    context.set(\u0027sectionLastStatus\u0027, lastStatus);\n} else if (payload \u0026\u0026 typeof payload === \u0027object\u0027 \u0026\u0026 payload.action === \u0027set_section\u0027) {\n    const section = String(payload.section || \u0027\u0027).trim();\n    const state = String(payload.state || \u0027auto\u0027).trim().toLowerCase();\n    const note = String(payload.note || \u0027\u0027).trim();\n    if (!section) {\n        return null;\n    }\n    if (state === \u0027auto\u0027) {\n        delete overrides[section];\n    } else {\n        overrides[section] = {\n            state,\n            note,\n            updatedAt: new Date().toISOString()\n        };\n    }\n    context.set(\u0027sectionOverrides\u0027, overrides);\n} else {\n    return null;\n}\n\nif (!lastStatus) {\n    return null;\n}\n\nconst cc = lastStatus.common_cycle || {};\nconst ot = lastStatus.otvod_cycle || {};\nconst seal = lastStatus.seal || {};\nconst devices = lastStatus.devices || {};\nconst conv = devices.conveyor || {};\nconst man = devices.manipulator || {};\nconst vfd = devices.vfd || {};\n\nfunction buildSection(id, title, short, actualState, detail, color) {\n    const override = overrides[id];\n    const section = {\n        id,\n        title,\n        short,\n        actual_state: actualState,\n        state: actualState,\n        detail,\n        color,\n        mode: \u0027auto\u0027,\n        note: \u0027\u0027\n    };\n    if (override \u0026\u0026 OVERRIDE_META[override.state]) {\n        section.state = OVERRIDE_META[override.state].label;\n        section.color = OVERRIDE_META[override.state].color;\n        section.mode = \u0027manual\u0027;\n        section.note = override.note || \u0027\u0027;\n    }\n    return section;\n}\n\nconst commonFailed = /failed|timeout|error/i.test(String(cc.last || \u0027\u0027));\nconst conveyorOnline = !!conv.online;\nconst manipOnline = !!man.online;\nconst vfdOnline = !!vfd.online;\nconst otFailed = /failed|timeout/i.test(String(ot.last || \u0027\u0027));\nconst vfdRunHz = Number(vfd.run_hz || 0);\n\nconst sections = [\n    buildSection(\n        \u0027common\u0027,\n        \u0027Общий цикл\u0027,\n        \u0027Цикл\u0027,\n        commonFailed ? \u0027Ошибка\u0027 : (cc.active ? (cc.pause ? \u0027Пауза\u0027 : \u0027Активен\u0027) : \u0027Стоп\u0027),\n        \u0027Этап: \u0027 + stageLabel(cc.stage),\n        commonFailed ? \u0027#d32f2f\u0027 : (cc.active ? (cc.pause ? \u0027#ef6c00\u0027 : \u0027#2e7d32\u0027) : \u0027#90a4ae\u0027)\n    ),\n    buildSection(\n        \u0027conveyor\u0027,\n        \u0027Подводной\u0027,\n        \u0027Подача\u0027,\n        !conveyorOnline ? \u0027Нет связи\u0027 : (conv.batch_ready ? \u0027Партия готова\u0027 : ((Number(conv.program_state || 0) \u003e 0) ? \u0027Формирует партию\u0027 : \u0027Ожидание\u0027)),\n        \u0027Партия #\u0027 + Number(conv.batch_seq || 0) + \u0027 | P1 \u0027 + Number(conv.program_state || 0) + \u0027/\u0027 + Number(conv.program_pass || 0),\n        !conveyorOnline ? \u0027#9e9e9e\u0027 : (conv.batch_ready ? \u0027#2e7d32\u0027 : ((Number(conv.program_state || 0) \u003e 0) ? \u0027#1e88e5\u0027 : \u0027#90a4ae\u0027))\n    ),\n    buildSection(\n        \u0027manipulator\u0027,\n        \u0027Манипулятор\u0027,\n        \u0027Манип.\u0027,\n        !manipOnline ? \u0027Нет связи\u0027 : (!!man.step7_ready ? \u0027Шаг 7\u0027 : ((Number(man.work_step || 0) \u003e 0) ? (\u0027Шаг \u0027 + Number(man.work_step || 0)) : \u0027Ожидание\u0027)),\n        \u0027work_step=\u0027 + Number(man.work_step || 0) + \u0027 | step7=\u0027 + (!!man.step7_ready ? \u0027да\u0027 : \u0027нет\u0027),\n        !manipOnline ? \u0027#9e9e9e\u0027 : (!!man.step7_ready ? \u0027#2e7d32\u0027 : ((Number(man.work_step || 0) \u003e 0) ? \u0027#1e88e5\u0027 : \u0027#90a4ae\u0027))\n    ),\n    buildSection(\n        \u0027otvod\u0027,\n        \u0027Отводной 2-ручейковый\u0027,\n        \u0027Отвод\u0027,\n        otFailed ? \u0027Ошибка\u0027 : (ot.active ? \u0027В работе\u0027 : (!!ot.ready ? \u0027Готов\u0027 : \u0027Ожидание\u0027)),\n        \u0027step=\u0027 + Number(ot.step_done || 0) + \u0027 | vfd=\u0027 + Number(ot.vfd_done || 0),\n        otFailed ? \u0027#d32f2f\u0027 : (ot.active ? \u0027#1e88e5\u0027 : (!!ot.ready ? \u0027#2e7d32\u0027 : \u0027#90a4ae\u0027))\n    ),\n    buildSection(\n        \u0027vfd\u0027,\n        \u0027Основной отводной / ПЧ\u0027,\n        \u0027ПЧ\u0027,\n        !vfdOnline ? \u0027Нет связи\u0027 : ((Number(vfd.fault || 0) \u003e 0) ? (\u0027Авария \u0027 + Number(vfd.fault || 0)) : (vfdRunHz \u003e 0 ? (vfdRunHz.toFixed(1) + \u0027 Гц\u0027) : \u0027Стоп\u0027)),\n        \u0027status=\u0027 + Number(vfd.status_word || 0) + \u0027 | fault=\u0027 + Number(vfd.fault || 0),\n        !vfdOnline ? \u0027#9e9e9e\u0027 : ((Number(vfd.fault || 0) \u003e 0) ? \u0027#d32f2f\u0027 : (vfdRunHz \u003e 0 ? \u0027#1e88e5\u0027 : \u0027#90a4ae\u0027))\n    ),\n    buildSection(\n        \u0027seal\u0027,\n        \u0027Запайщик\u0027,\n        \u0027Запайка\u0027,\n        !!seal.start_out ? \u0027Пуск\u0027 : (!!seal.done ? \u0027Завершен\u0027 : \u0027Ожидание\u0027),\n        \u0027start=\u0027 + (!!seal.start_out ? \u0027ON\u0027 : \u0027OFF\u0027) + \u0027 | done=\u0027 + (!!seal.done ? \u0027YES\u0027 : \u0027NO\u0027),\n        !!seal.start_out ? \u0027#ef6c00\u0027 : (!!seal.done ? \u0027#2e7d32\u0027 : \u0027#90a4ae\u0027)\n    )\n];\n\nmsg.payload = { sections };\nreturn msg;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  470,
+        "y":  1700,
+        "wires":  [
+                      "ui_tpl_common_cycle_sections"
+                  ]
+    },
+    {
+        "id":  "ui_tpl_common_cycle_sections",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_common_cycle_sections",
+        "page":  "",
+        "ui":  "",
+        "name":  "Круглые статусы участков",
+        "order":  1,
+        "width":  "12",
+        "height":  "7",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"section-grid\"\u003e\n    \u003cdiv v-for=\"section in sections\" :key=\"section.id\" class=\"section-card\"\u003e\n      \u003cbutton type=\"button\" class=\"section-circle\" :style=\"{ backgroundColor: section.color }\" @click=\"openDialog(section)\"\u003e\n        \u003cspan class=\"section-circle-text\"\u003e{{ section.short }}\u003c/span\u003e\n      \u003c/button\u003e\n      \u003cdiv class=\"section-title\"\u003e{{ section.title }}\u003c/div\u003e\n      \u003cdiv class=\"section-state\"\u003e{{ section.state }}\u003c/div\u003e\n      \u003cdiv class=\"section-detail\"\u003e{{ section.detail }}\u003c/div\u003e\n      \u003cdiv v-if=\"section.mode === \u0027manual\u0027\" class=\"section-manual\"\u003eручной статус\u003c/div\u003e\n      \u003cdiv v-if=\"section.note\" class=\"section-note\"\u003e{{ section.note }}\u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cv-dialog v-model=\"dialog\" max-width=\"560\"\u003e\n      \u003cv-card v-if=\"current\"\u003e\n        \u003cv-card-title class=\"text-h6\"\u003e{{ current.title }}\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          \u003cdiv class=\"dialog-line\"\u003e\u003cstrong\u003eРеальное состояние:\u003c/strong\u003e {{ current.actual_state }}\u003c/div\u003e\n          \u003cdiv class=\"dialog-line\"\u003e\u003cstrong\u003eДетали:\u003c/strong\u003e {{ current.detail }}\u003c/div\u003e\n          \u003cdiv class=\"dialog-line dialog-tip\"\u003eНиже меняется только операторский статус на экране. Автоматика мастера от этого не переключается.\u003c/div\u003e\n          \u003cv-select\n            v-model=\"selectedState\"\n            :items=\"stateOptions\"\n            item-title=\"title\"\n            item-value=\"value\"\n            label=\"Операторский статус\"\n            variant=\"outlined\"\n            density=\"comfortable\"\n            class=\"dialog-field\"\n          /\u003e\n          \u003cv-textarea\n            v-model=\"selectedNote\"\n            label=\"Заметка\"\n            variant=\"outlined\"\n            density=\"comfortable\"\n            rows=\"3\"\n            auto-grow\n            class=\"dialog-field\"\n          /\u003e\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003eОтмена\u003c/v-btn\u003e\n          \u003cv-btn color=\"primary\" variant=\"flat\" @click=\"saveSectionStatus\"\u003eСохранить\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n  data() {\n    return {\n      sections: [],\n      dialog: false,\n      current: null,\n      selectedState: \u0027auto\u0027,\n      selectedNote: \u0027\u0027,\n      stateOptions: [\n        { title: \u0027Авто\u0027, value: \u0027auto\u0027 },\n        { title: \u0027Норма\u0027, value: \u0027ok\u0027 },\n        { title: \u0027Внимание\u0027, value: \u0027warn\u0027 },\n        { title: \u0027Стоп\u0027, value: \u0027stop\u0027 },\n        { title: \u0027Пауза\u0027, value: \u0027pause\u0027 }\n      ]\n    }\n  },\n  watch: {\n    msg: {\n      immediate: true,\n      deep: true,\n      handler(value) {\n        if (value \u0026\u0026 value.payload \u0026\u0026 Array.isArray(value.payload.sections)) {\n          this.sections = value.payload.sections\n        }\n      }\n    }\n  },\n  methods: {\n    openDialog(section) {\n      this.current = section\n      this.selectedState = section.mode === \u0027manual\u0027\n        ? this.stateOptions.find(opt =\u003e opt.title === section.state)?.value || \u0027warn\u0027\n        : \u0027auto\u0027\n      this.selectedNote = section.note || \u0027\u0027\n      this.dialog = true\n    },\n    saveSectionStatus() {\n      if (!this.current) {\n        this.dialog = false\n        return\n      }\n      this.send({\n        payload: {\n          action: \u0027set_section\u0027,\n          section: this.current.id,\n          state: this.selectedState,\n          note: this.selectedNote || \u0027\u0027\n        }\n      })\n      this.dialog = false\n    }\n  }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.section-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));\n  gap: 14px;\n  width: 100%;\n}\n.section-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  text-align: center;\n  padding: 8px 6px;\n  border: 1px solid #d8e0e5;\n  border-radius: 14px;\n  background: #fbfdff;\n}\n.section-circle {\n  width: 98px;\n  height: 98px;\n  border-radius: 50%;\n  border: 0;\n  cursor: pointer;\n  color: #ffffff;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 10px;\n  box-shadow: 0 4px 16px rgba(0,0,0,0.15);\n}\n.section-circle-text {\n  font-size: 15px;\n  line-height: 1.15;\n  font-weight: 700;\n}\n.section-title {\n  margin-top: 10px;\n  font-size: 15px;\n  font-weight: 700;\n  color: #263238;\n}\n.section-state {\n  margin-top: 6px;\n  font-size: 14px;\n  font-weight: 700;\n  color: #1f2d3d;\n}\n.section-detail {\n  margin-top: 4px;\n  font-size: 12px;\n  line-height: 1.35;\n  color: #52636d;\n}\n.section-manual {\n  margin-top: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  color: #ef6c00;\n  text-transform: uppercase;\n}\n.section-note {\n  margin-top: 4px;\n  font-size: 12px;\n  line-height: 1.35;\n  color: #37474f;\n}\n.dialog-line {\n  margin-bottom: 8px;\n  line-height: 1.4;\n}\n.dialog-tip {\n  color: #546e7a;\n}\n.dialog-field {\n  margin-top: 10px;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  790,
+        "y":  1700,
+        "wires":  [
+                      "fn_common_cycle_sections"
+                  ]
+    }
+]

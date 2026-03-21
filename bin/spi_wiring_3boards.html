@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>SPI Wiring: master, conveyor, manipulator</title>
+  <style>
+    :root {
+      --fg: #101418;
+      --muted: #4b5563;
+      --grid: #d1d5db;
+      --head: #e8f1f8;
+      --accent: #0f5d8c;
+      --bg: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 28px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      line-height: 1.35;
+      font-size: 14px;
+    }
+
+    h1, h2 {
+      margin: 0 0 10px;
+      color: var(--accent);
+    }
+
+    h1 {
+      font-size: 24px;
+    }
+
+    h2 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 0 0 8px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid var(--grid);
+      padding: 8px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: var(--head);
+    }
+
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .note {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-left: 4px solid var(--accent);
+      background: #f6fbff;
+    }
+  </style>
+</head>
+<body>
+  <h1>SPI Wiring For 3 ESP32 Boards</h1>
+  <p class="muted">Схема связи между <code>master</code>, <code>conveyor</code> и <code>manipulator</code>. RS485 остаётся только на <code>master</code> для частотника.</p>
+
+  <h2>Распиновка по платам</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Плата</th>
+        <th>Назначение</th>
+        <th>GPIO</th>
+        <th>Куда подключить</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td rowspan="5"><strong>master</strong></td>
+        <td><code>SPI SCK</code></td>
+        <td><code>GPIO14</code></td>
+        <td>На <code>conveyor GPIO16</code> и <code>manipulator GPIO16</code></td>
+      </tr>
+      <tr>
+        <td><code>SPI MOSI</code></td>
+        <td><code>GPIO23</code></td>
+        <td>На <code>conveyor GPIO17</code> и <code>manipulator GPIO17</code></td>
+      </tr>
+      <tr>
+        <td><code>SPI MISO</code></td>
+        <td><code>GPIO19</code></td>
+        <td>Общий вход от <code>conveyor GPIO18</code> и <code>manipulator GPIO13</code></td>
+      </tr>
+      <tr>
+        <td><code>CS conveyor</code></td>
+        <td><code>GPIO25</code></td>
+        <td>На <code>conveyor GPIO21</code></td>
+      </tr>
+      <tr>
+        <td><code>CS manipulator</code></td>
+        <td><code>GPIO26</code></td>
+        <td>На <code>manipulator GPIO4</code></td>
+      </tr>
+
+      <tr>
+        <td rowspan="4"><strong>conveyor</strong></td>
+        <td><code>SPI SCK</code></td>
+        <td><code>GPIO16</code></td>
+        <td>На <code>master GPIO14</code></td>
+      </tr>
+      <tr>
+        <td><code>SPI MOSI</code></td>
+        <td><code>GPIO17</code></td>
+        <td>На <code>master GPIO23</code></td>
+      </tr>
+      <tr>
+        <td><code>SPI MISO</code></td>
+        <td><code>GPIO18</code></td>
+        <td>На общий <code>MISO</code>, который идёт в <code>master GPIO19</code></td>
+      </tr>
+      <tr>
+        <td><code>CS</code></td>
+        <td><code>GPIO21</code></td>
+        <td>На <code>master GPIO25</code></td>
+      </tr>
+
+      <tr>
+        <td rowspan="4"><strong>manipulator</strong></td>
+        <td><code>SPI SCK</code></td>
+        <td><code>GPIO16</code></td>
+        <td>На <code>master GPIO14</code></td>
+      </tr>
+      <tr>
+        <td><code>SPI MOSI</code></td>
+        <td><code>GPIO17</code></td>
+        <td>На <code>master GPIO23</code></td>
+      </tr>
+      <tr>
+        <td><code>SPI MISO</code></td>
+        <td><code>GPIO13</code></td>
+        <td>На общий <code>MISO</code>, который идёт в <code>master GPIO19</code></td>
+      </tr>
+      <tr>
+        <td><code>CS</code></td>
+        <td><code>GPIO4</code></td>
+        <td>На <code>master GPIO26</code></td>
+      </tr>
+
+      <tr>
+        <td><strong>Все 3 платы</strong></td>
+        <td><code>GND</code></td>
+        <td><code>GND</code></td>
+        <td>Объединить между всеми тремя платами</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Короткая схема проводов</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Откуда</th>
+        <th>Куда</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>master GPIO14</code></td>
+        <td><code>conveyor GPIO16</code> + <code>manipulator GPIO16</code></td>
+      </tr>
+      <tr>
+        <td><code>master GPIO23</code></td>
+        <td><code>conveyor GPIO17</code> + <code>manipulator GPIO17</code></td>
+      </tr>
+      <tr>
+        <td><code>conveyor GPIO18</code> + <code>manipulator GPIO13</code></td>
+        <td><code>master GPIO19</code></td>
+      </tr>
+      <tr>
+        <td><code>master GPIO25</code></td>
+        <td><code>conveyor GPIO21</code></td>
+      </tr>
+      <tr>
+        <td><code>master GPIO26</code></td>
+        <td><code>manipulator GPIO4</code></td>
+      </tr>
+      <tr>
+        <td><code>GND</code></td>
+        <td>Общий между всеми тремя платами</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Важно:</strong> на <code>manipulator GPIO4</code> поставь подтяжку <code>10 кОм</code> к <code>3.3V</code>, чтобы <code>CS</code> был неактивен на старте.
+  </div>
+  <div class="note">
+    <strong>Если общий MISO шумит:</strong> поставь последовательно по <code>220-470 Ом</code> в линию <code>MISO</code> каждого slave перед точкой объединения.
+  </div>
+</body>
+</html>

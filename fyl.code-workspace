@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "path": "conveyor_control_com10"
+    },
+    {
+      "path": "manipulator_com11"
+    },
+    {
+      "path": "master_control_com12"
+    },
+    {
+      "path": "Plan"
+    }
+  ],
+  "settings": {}
+}

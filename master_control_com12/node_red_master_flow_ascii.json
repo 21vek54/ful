@@ -1,0 +1,2212 @@
+﻿[
+    {
+        "id":  "tab_conveyor_monitor",
+        "type":  "tab",
+        "label":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440",
+        "disabled":  false,
+        "info":  ""
+    },
+    {
+        "id":  "ui_base_conveyor",
+        "type":  "ui-base",
+        "name":  "\u041f\u0430\u043d\u0435\u043b\u044c \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f",
+        "path":  "/dashboard",
+        "appIcon":  "",
+        "includeClientData":  true,
+        "acceptsClientConfig":  [
+                                    "ui-notification",
+                                    "ui-control"
+                                ],
+        "showPathInSidebar":  false,
+        "headerContent":  "page",
+        "navigationStyle":  "default",
+        "titleBarStyle":  "default",
+        "showReconnectNotification":  true,
+        "notificationDisplayTime":  1,
+        "showDisconnectNotification":  true,
+        "allowInstall":  false
+    },
+    {
+        "id":  "ui_theme_conveyor",
+        "type":  "ui-theme",
+        "name":  "\u0422\u0435\u043c\u0430 \u043f\u0430\u043d\u0435\u043b\u0438",
+        "colors":  {
+                       "surface":  "#ffffff",
+                       "primary":  "#0094CE",
+                       "bgPage":  "#eeeeee",
+                       "groupBg":  "#ffffff",
+                       "groupOutline":  "#cccccc"
+                   },
+        "sizes":  {
+                      "density":  "default",
+                      "pagePadding":  "12px",
+                      "groupGap":  "12px",
+                      "groupBorderRadius":  "4px",
+                      "widgetGap":  "12px"
+                  }
+    },
+    {
+        "id":  "ui_page_conveyor",
+        "type":  "ui-page",
+        "name":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440",
+        "ui":  "ui_base_conveyor",
+        "path":  "/conveyor",
+        "icon":  "home",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ],
+        "order":  0,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_status",
+        "type":  "ui-group",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430",
+        "page":  "ui_page_conveyor",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_broker_local",
+        "type":  "mqtt-broker",
+        "name":  "\u041b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439 Mosquitto",
+        "broker":  "192.168.1.136",
+        "port":  "1883",
+        "clientid":  "",
+        "autoConnect":  true,
+        "usetls":  false,
+        "protocolVersion":  "4",
+        "keepalive":  "60",
+        "cleansession":  true,
+        "autoUnsubscribe":  true,
+        "birthTopic":  "",
+        "birthQos":  "0",
+        "birthRetain":  "false",
+        "birthPayload":  "",
+        "birthMsg":  {
+
+                     },
+        "closeTopic":  "",
+        "closeQos":  "0",
+        "closeRetain":  "false",
+        "closePayload":  "",
+        "closeMsg":  {
+
+                     },
+        "willTopic":  "",
+        "willQos":  "0",
+        "willRetain":  "false",
+        "willPayload":  "",
+        "willMsg":  {
+
+                    },
+        "userProps":  "",
+        "sessionExpiry":  ""
+    },
+    {
+        "id":  "mqtt_in_status",
+        "type":  "mqtt in",
+        "z":  "tab_conveyor_monitor",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430 \u0447\u0435\u0440\u0435\u0437 \u043c\u0430\u0441\u0442\u0435\u0440",
+        "topic":  "fyl/master_com12/status",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  180,
+        "y":  120,
+        "wires":  [
+                      [
+                          "fn_status_text"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_status_text",
+        "type":  "function",
+        "z":  "tab_conveyor_monitor",
+        "name":  "\u0424\u043e\u0440\u043c\u0430\u0442 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430",
+        "func":  "let p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) return null;\nconst dev = (p.devices \u0026\u0026 p.devices.conveyor) ? p.devices.conveyor : {};\nconst online = dev.online ? \u0027\u0432 \u0441\u0435\u0442\u0438\u0027 : \u0027\u043d\u0435 \u0432 \u0441\u0435\u0442\u0438\u0027;\nconst proto = dev.kind_ok ? \u0027\u043d\u043e\u0440\u043c\u0430\u0027 : \u0027\u043e\u0448\u0438\u0431\u043a\u0430\u0027;\nmsg.payload = `\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440: ${online} | \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b=${proto} | \u0441\u0442\u0430\u0442\u0443\u0441=${dev.status_word ?? \u0027-\u0027} | \u043e\u0448\u0438\u0431\u043a\u0430=${dev.error_word ?? \u0027-\u0027} | \u0444\u043b\u0430\u0433=${dev.flag_state ?? \u0027-\u0027} | \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0435=${dev.motion_state ?? \u0027-\u0027}`;\nreturn msg;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  400,
+        "y":  120,
+        "wires":  [
+                      [
+                          "ui_text_status",
+                          "debug_status"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_text_status",
+        "type":  "ui-text",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_status",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430",
+        "label":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 (12)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  20,
+        "color":  "#0094CE",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "payload",
+        "valueType":  "msg",
+        "x":  640,
+        "y":  120,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_status",
+        "type":  "debug",
+        "z":  "tab_conveyor_monitor",
+        "name":  "\u041e\u0442\u043b\u0430\u0434\u043a\u0430 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 MQTT",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  false,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  650,
+        "y":  180,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_page_manual",
+        "type":  "ui-page",
+        "name":  "\u0420\u0443\u0447\u043d\u043e\u0435 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435",
+        "ui":  "ui_base_conveyor",
+        "path":  "/manual",
+        "icon":  "settings",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ],
+        "order":  1,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_manual",
+        "type":  "ui-group",
+        "name":  "\u041a\u043e\u043c\u0430\u043d\u0434\u044b \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430",
+        "page":  "ui_page_manual",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_out_flag_cmd",
+        "type":  "mqtt out",
+        "z":  "tab_conveyor_monitor",
+        "name":  "\u041a\u043e\u043c\u0430\u043d\u0434\u044b \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430 \u0447\u0435\u0440\u0435\u0437 \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "topic":  "fyl/master_com12/cmd",
+        "qos":  "1",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  740,
+        "y":  300,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_btn_flag_up",
+        "type":  "ui-button",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_manual",
+        "name":  "\u0424\u043b\u0430\u0433 \u0432\u0432\u0435\u0440\u0445",
+        "label":  "\u0424\u043b\u0430\u0433 \u0432\u0432\u0435\u0440\u0445",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "CONV W",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1fa84a",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  420,
+        "y":  260,
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_flag_down",
+        "type":  "ui-button",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_manual",
+        "name":  "\u0424\u043b\u0430\u0433 \u0432\u043d\u0438\u0437",
+        "label":  "\u0424\u043b\u0430\u0433 \u0432\u043d\u0438\u0437",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "CONV S",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#b03a2e",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  420,
+        "y":  340,
+        "wires":  [
+                      [
+                          "mqtt_out_flag_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "tab_master_mqtt",
+        "type":  "tab",
+        "label":  "\u041c\u0430\u0441\u0442\u0435\u0440 MQTT",
+        "disabled":  false,
+        "info":  ""
+    },
+    {
+        "id":  "mqtt_broker_master1884",
+        "type":  "mqtt-broker",
+        "name":  "\u041b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439 Mosquitto 1884",
+        "broker":  "127.0.0.1",
+        "port":  "1884",
+        "clientid":  "",
+        "autoConnect":  true,
+        "usetls":  false,
+        "protocolVersion":  "4",
+        "keepalive":  "60",
+        "cleansession":  true,
+        "autoUnsubscribe":  true,
+        "birthTopic":  "",
+        "birthQos":  "0",
+        "birthRetain":  "false",
+        "birthPayload":  "",
+        "birthMsg":  {
+
+                     },
+        "closeTopic":  "",
+        "closeQos":  "0",
+        "closeRetain":  "false",
+        "closePayload":  "",
+        "closeMsg":  {
+
+                     },
+        "willTopic":  "",
+        "willQos":  "0",
+        "willRetain":  "false",
+        "willPayload":  "",
+        "willMsg":  {
+
+                    },
+        "userProps":  "",
+        "sessionExpiry":  ""
+    },
+    {
+        "id":  "ui_page_master",
+        "type":  "ui-page",
+        "name":  "\u041c\u0430\u0441\u0442\u0435\u0440",
+        "ui":  "ui_base_conveyor",
+        "path":  "/master",
+        "icon":  "tune",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "px":  0,
+                                "name":  "Default",
+                                "cols":  3
+                            },
+                            {
+                                "px":  576,
+                                "name":  "Tablet",
+                                "cols":  6
+                            },
+                            {
+                                "px":  768,
+                                "name":  "Small Desktop",
+                                "cols":  9
+                            },
+                            {
+                                "px":  1024,
+                                "name":  "Desktop",
+                                "cols":  12
+                            }
+                        ],
+        "order":  2,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_master_status",
+        "type":  "ui-group",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "page":  "ui_page_master",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_master_cmd",
+        "type":  "ui-group",
+        "name":  "\u041a\u043e\u043c\u0430\u043d\u0434\u044b \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "page":  "ui_page_master",
+        "width":  "6",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "mqtt_in_master_status",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043c\u0430\u0441\u0442\u0435\u0440\u0430 JSON",
+        "topic":  "fyl/master_com12/status",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  180,
+        "y":  140,
+        "wires":  [
+                      [
+                          "fn_master_status_parse",
+                          "debug_master_status",
+                          "fn_rs485_status_parse"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_master_status_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "\u0420\u0430\u0437\u0431\u043e\u0440 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "func":  "let p = msg.payload;\nif (typeof p === \"string\") {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \"object\") return null;\n\nconst wifiState = p.wifi ? \"\\u043f\\u043e\\u0434\\u043a\\u043b\\u044e\\u0447\\u0435\\u043d\" : \"\\u043d\\u0435\\u0442\";\nconst ip = p.ip ? p.ip : \"-\";\nconst modbusId = (p.modbus_id !== undefined) ? p.modbus_id : \"-\";\nconst req = (p.mb_req !== undefined) ? p.mb_req : 0;\nconst ok = (p.mb_ok !== undefined) ? p.mb_ok : 0;\nconst err = (p.mb_err !== undefined) ? p.mb_err : 0;\nconst baseHz = (p.vfd_base_hz !== undefined) ? Number(p.vfd_base_hz).toFixed(2) : \"0.00\";\nconst cmdSeq = (p.cmd_seq !== undefined) ? p.cmd_seq : 0;\nconst lastCmd = p.last_cmd ? p.last_cmd : \"-\";\n\nconst wifi = `Wi-Fi: ${wifiState} | IP: ${ip}`;\nconst mb = `ID=${modbusId} | req=${req} | ok=${ok} | err=${err}`;\nconst vfd = `\\u0411\\u0430\\u0437\\u043e\\u0432\\u0430\\u044f \\u0447\\u0430\\u0441\\u0442\\u043e\\u0442\\u0430: ${baseHz} \\u0413\\u0446`;\nconst last = `\\u041a\\u043e\\u043c\\u0430\\u043d\\u0434\\u0430 #${cmdSeq}: ${lastCmd}`;\n\nreturn [{ payload: wifi }, { payload: mb }, { payload: vfd }, { payload: last }];",
+        "outputs":  4,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  390,
+        "y":  140,
+        "wires":  [
+                      [
+                          "ui_txt_master_wifi",
+                          "mqtt_out_master_trace"
+                      ],
+                      [
+                          "ui_txt_master_modbus",
+                          "mqtt_out_master_trace"
+                      ],
+                      [
+                          "ui_txt_master_vfd",
+                          "mqtt_out_master_trace"
+                      ],
+                      [
+                          "ui_txt_master_lastcmd",
+                          "mqtt_out_master_trace"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_wifi",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u0421\u0432\u044f\u0437\u044c Wi-Fi",
+        "label":  "\u0421\u0432\u044f\u0437\u044c Wi-Fi",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  18,
+        "color":  "#0094CE",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  660,
+        "y":  100,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_modbus",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 Modbus",
+        "label":  "Modbus",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  16,
+        "color":  "#2c3e50",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  670,
+        "y":  140,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_vfd",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  3,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u041f\u0427",
+        "label":  "\u041f\u0427",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  16,
+        "color":  "#2c3e50",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  650,
+        "y":  180,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_master_status",
+        "type":  "debug",
+        "z":  "tab_master_mqtt",
+        "name":  "\u041e\u0442\u043b\u0430\u0434\u043a\u0430 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  false,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  410,
+        "y":  220,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_out_master_cmd",
+        "type":  "mqtt out",
+        "z":  "tab_master_mqtt",
+        "name":  "\u041a\u043e\u043c\u0430\u043d\u0434\u044b \u043c\u0430\u0441\u0442\u0435\u0440\u0430 MQTT",
+        "topic":  "fyl/master_com12/cmd",
+        "qos":  "1",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  710,
+        "y":  340,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_status",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0417\u0430\u043f\u0440\u043e\u0441 \u0441\u0442\u0430\u0442\u0443\u0441\u0430",
+        "label":  "\u0421\u0422\u0410\u0422\u0423\u0421",
+        "order":  1,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1565c0",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  280,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_state",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0417\u0430\u043f\u0440\u043e\u0441 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u044f",
+        "label":  "\u0421\u041e\u0421\u0422\u041e\u042f\u041d\u0418\u0415",
+        "order":  2,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "STATE",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#00897b",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  320,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_wifi",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 Wi-Fi",
+        "label":  "\u0421\u0422\u0410\u0422\u0423\u0421 Wi-Fi",
+        "order":  3,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "WIFI STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#6a1b9a",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  440,
+        "y":  360,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_mqtt",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 MQTT",
+        "label":  "\u0421\u0422\u0410\u0422\u0423\u0421 MQTT",
+        "order":  4,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MQTT STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#5d4037",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  400,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_vfdstat",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u041f\u0427",
+        "label":  "\u041f\u0427 \u0421\u0422\u0410\u0422\u0423\u0421",
+        "order":  5,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "VFD STAT",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  440,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_vfdrunfreq",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0427\u0430\u0441\u0442\u043e\u0442\u0430 \u041f\u0427",
+        "label":  "\u041f\u0427 \u0427\u0410\u0421\u0422\u041e\u0422\u0410",
+        "order":  6,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "VFD RUNFREQ",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  460,
+        "y":  480,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_master_vfdstop",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "name":  "\u0421\u0442\u043e\u043f \u041f\u0427",
+        "label":  "\u041f\u0427 \u0421\u0422\u041e\u041f",
+        "order":  7,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "VFD STOP",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#c62828",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  450,
+        "y":  520,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "4fcb92f6e4a8cf17",
+        "type":  "ui-template",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_cmd",
+        "page":  "",
+        "ui":  "",
+        "name":  "\u041f\u0427 \u043f\u0443\u0441\u043a 5\u0441",
+        "order":  8,
+        "width":  "2",
+        "height":  "1",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"vfd-run5-widget\"\u003e\n    \u003cv-btn color=\"warning\" variant=\"flat\" block @click=\"dialog = true\"\u003e\n      \u041f\u0427 5\u0441\n    \u003c/v-btn\u003e\n    \u003cv-dialog v-model=\"dialog\" max-width=\"520\"\u003e\n      \u003cv-card\u003e\n        \u003cv-card-title class=\"text-h6\"\u003e\u041f\u0443\u0441\u043a \u0447\u0430\u0441\u0442\u043e\u0442\u043d\u0438\u043a\u0430 \u043d\u0430 5 \u0441\u0435\u043a\u0443\u043d\u0434\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          \u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u041f\u0427 \u0432\u043f\u0435\u0440\u0435\u0434 \u043d\u0430 \u003cb\u003e5 \u0441\u0435\u043a\u0443\u043d\u0434\u003c/b\u003e \u0441 \u0443\u0441\u0442\u0430\u0432\u043a\u043e\u0439 \u003cb\u003e5 \u0413\u0446\u003c/b\u003e?\u003cbr\u003e\u0412 \u043c\u0430\u0441\u0442\u0435\u0440 \u0431\u0443\u0434\u0435\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u003ccode\u003eVFD RUN5 5 FWD\u003c/code\u003e.\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003e\u041e\u0442\u043c\u0435\u043d\u0430\u003c/v-btn\u003e\n          \u003cv-btn color=\"warning\" variant=\"flat\" @click=\"startRun5\"\u003e\u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            dialog: false\n        }\n    },\n    methods: {\n        startRun5() {\n            this.dialog = false\n            this.send({ payload: \u0027VFD RUN5 5 FWD\u0027 })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.vfd-run5-widget {\n    width: 100%;\n}\n.vfd-run5-widget .v-btn {\n    width: 100%;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  460,
+        "y":  560,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "inject_master_status_ping",
+        "type":  "inject",
+        "z":  "tab_master_mqtt",
+        "name":  "\u0417\u0430\u043f\u0440\u043e\u0441 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u0432\u0440\u0443\u0447\u043d\u0443\u044e",
+        "props":  [
+                      {
+                          "p":  "payload"
+                      }
+                  ],
+        "repeat":  "",
+        "crontab":  "",
+        "once":  false,
+        "onceDelay":  "1",
+        "topic":  "",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "x":  180,
+        "y":  300,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_lastcmd",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  4,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u044f\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430",
+        "label":  "\u041a\u043e\u043c\u0430\u043d\u0434\u0430",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  14,
+        "color":  "#37474f",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  670,
+        "y":  220,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_in_master_resp",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "name":  "\u041e\u0442\u0432\u0435\u0442\u044b \u043c\u0430\u0441\u0442\u0435\u0440\u0430 JSON",
+        "topic":  "fyl/master_com12/resp",
+        "qos":  "1",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  180,
+        "y":  260,
+        "wires":  [
+                      [
+                          "fn_master_resp_parse",
+                          "debug_master_resp"
+                      ]
+                  ]
+    },
+    {
+        "id":  "fn_master_resp_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "\u0420\u0430\u0437\u0431\u043e\u0440 \u043e\u0442\u0432\u0435\u0442\u0430 \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "func":  "let p = msg.payload;\nif (typeof p === \"string\") {\n  try { p = JSON.parse(p); } catch (e) {\n    return { payload: `\u041e\u0442\u0432\u0435\u0442: ${msg.payload}` };\n  }\n}\nif (!p || typeof p !== \"object\") {\n  return { payload: \"\u041e\u0442\u0432\u0435\u0442: \u043d\u0435\u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 \u0444\u043e\u0440\u043c\u0430\u0442\" };\n}\nconst seq = (p.seq !== undefined) ? p.seq : \"-\";\nconst cmd = p.cmd ? p.cmd : \"-\";\nconst accepted = !!p.accepted;\nconst result = p.result ? p.result : \"-\";\nconst state = accepted ? \"\u041e\u041a\" : \"\u041e\u0428\u0418\u0411\u041a\u0410\";\nmsg.payload = `#${seq} | ${state} | ${cmd} | ${result}`;\nreturn msg;",
+        "outputs":  1,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  410,
+        "y":  260,
+        "wires":  [
+                      [
+                          "ui_txt_master_resp",
+                          "mqtt_out_master_trace",
+                          "ui_txt_conveyor_resp",
+                          "ui_txt_manip_resp"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_master_resp",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_master_status",
+        "order":  5,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u041e\u0442\u0432\u0435\u0442 \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u043b\u0435\u0440\u0430",
+        "label":  "\u041e\u0442\u0432\u0435\u0442",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  14,
+        "color":  "#1b5e20",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  670,
+        "y":  260,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_master_resp",
+        "type":  "debug",
+        "z":  "tab_master_mqtt",
+        "name":  "\u041e\u0442\u043b\u0430\u0434\u043a\u0430 \u043e\u0442\u0432\u0435\u0442\u0430 \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  false,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  420,
+        "y":  320,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_out_master_trace",
+        "type":  "mqtt out",
+        "z":  "tab_master_mqtt",
+        "name":  "\u0422\u0440\u0430\u0441\u0441\u0438\u0440\u043e\u0432\u043a\u0430 UI \u043c\u0430\u0441\u0442\u0435\u0440\u0430",
+        "topic":  "fyl/master_com12/ui_trace",
+        "qos":  "0",
+        "retain":  "false",
+        "respTopic":  "",
+        "contentType":  "",
+        "userProps":  "",
+        "correl":  "",
+        "expiry":  "",
+        "broker":  "mqtt_broker_master1884",
+        "x":  970,
+        "y":  250,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_page_rs485",
+        "type":  "ui-page",
+        "name":  "\u0423\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0430 \u0448\u0438\u043d\u044b",
+        "ui":  "ui_base_conveyor",
+        "path":  "/rs485",
+        "icon":  "lan",
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "breakpoints":  [
+                            {
+                                "px":  0,
+                                "name":  "Default",
+                                "cols":  3
+                            },
+                            {
+                                "px":  576,
+                                "name":  "Tablet",
+                                "cols":  6
+                            },
+                            {
+                                "px":  768,
+                                "name":  "Small Desktop",
+                                "cols":  9
+                            },
+                            {
+                                "px":  1024,
+                                "name":  "Desktop",
+                                "cols":  12
+                            }
+                        ],
+        "order":  3,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false"
+    },
+    {
+        "id":  "ui_group_rs485_overview",
+        "type":  "ui-group",
+        "name":  "\u041e\u0431\u0437\u043e\u0440 \u0448\u0438\u043d\u044b",
+        "page":  "ui_page_rs485",
+        "width":  "6",
+        "height":  "1",
+        "order":  0,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_rs485_cmd",
+        "type":  "ui-group",
+        "name":  "\u041a\u043e\u043c\u0430\u043d\u0434\u044b \u0448\u0438\u043d\u044b",
+        "page":  "ui_page_rs485",
+        "width":  "6",
+        "height":  "1",
+        "order":  1,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_rs485_devices",
+        "type":  "ui-group",
+        "name":  "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432",
+        "page":  "ui_page_rs485",
+        "width":  "6",
+        "height":  "1",
+        "order":  2,
+        "showTitle":  true,
+        "className":  "",
+        "visible":  "true",
+        "disabled":  "false",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_txt_rs485_scan",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_overview",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u0421\u043a\u0430\u043d\u0435\u0440",
+        "label":  "\u041f\u0427 (11)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  16,
+        "color":  "#00897b",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  760,
+        "y":  620,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_rs485_online",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_overview",
+        "order":  2,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u041e\u043d\u043b\u0430\u0439\u043d \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0430",
+        "label":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 (12)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  15,
+        "color":  "#2c3e50",
+        "wrapText":  false,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  770,
+        "y":  660,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "ui_txt_rs485_devices",
+        "type":  "ui-text",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_devices",
+        "order":  1,
+        "width":  "6",
+        "height":  "1",
+        "name":  "\u0421\u043f\u0438\u0441\u043e\u043a",
+        "label":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 (13)",
+        "format":  "{{msg.payload}}",
+        "layout":  "row-spread",
+        "style":  true,
+        "font":  "Helvetica",
+        "fontSize":  14,
+        "color":  "#37474f",
+        "wrapText":  true,
+        "className":  "",
+        "value":  "msg.payload",
+        "valueType":  "msg",
+        "x":  770,
+        "y":  700,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "fn_rs485_status_parse",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "name":  "\u0420\u0430\u0437\u0431\u043e\u0440 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432",
+        "func":  "let p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) return null;\nconst devices = p.devices || {};\nconst vfd = devices.vfd || {};\nconst conveyor = devices.conveyor || {};\nconst manipulator = devices.manipulator || {};\nconst vfdLine = `\u041f\u0427: ${vfd.online ? \u0027\u0432 \u0441\u0435\u0442\u0438\u0027 : \u0027\u043d\u0435 \u0432 \u0441\u0435\u0442\u0438\u0027} | \u0441\u0442\u0430\u0442\u0443\u0441=${vfd.status_word ?? \u0027-\u0027} | \u0447\u0430\u0441\u0442\u043e\u0442\u0430=${vfd.run_hz ?? 0} \u0413\u0446 | \u0430\u0432\u0430\u0440\u0438\u044f=${vfd.fault ?? 0}`;\nconst conveyorLine = `\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440: ${conveyor.online ? \u0027\u0432 \u0441\u0435\u0442\u0438\u0027 : \u0027\u043d\u0435 \u0432 \u0441\u0435\u0442\u0438\u0027} | \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b=${conveyor.kind_ok ? \u0027\u043d\u043e\u0440\u043c\u0430\u0027 : \u0027\u043e\u0448\u0438\u0431\u043a\u0430\u0027} | \u0441\u0442\u0430\u0442\u0443\u0441=${conveyor.status_word ?? \u0027-\u0027} | \u043e\u0448\u0438\u0431\u043a\u0430=${conveyor.error_word ?? \u0027-\u0027} | \u0444\u043b\u0430\u0433=${conveyor.flag_state ?? \u0027-\u0027} | \u0434\u0432\u0438\u0436\u0435\u043d\u0438\u0435=${conveyor.motion_state ?? \u0027-\u0027}`;\nconst manipulatorLine = `\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440: ${manipulator.online ? \u0027\u0432 \u0441\u0435\u0442\u0438\u0027 : \u0027\u043d\u0435 \u0432 \u0441\u0435\u0442\u0438\u0027} | \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b=${manipulator.kind_ok ? \u0027\u043d\u043e\u0440\u043c\u0430\u0027 : \u0027\u043e\u0448\u0438\u0431\u043a\u0430\u0027} | \u0441\u0442\u0430\u0442\u0443\u0441=${manipulator.status_word ?? \u0027-\u0027} | \u043e\u0448\u0438\u0431\u043a\u0430=${manipulator.error_word ?? \u0027-\u0027} | \u0440\u0435\u0436\u0438\u043c=${manipulator.mode ?? \u0027-\u0027} | \u0437\u0430\u0434\u0430\u0447\u0430=${manipulator.job ?? \u0027-\u0027} | \u0434\u0430\u0442\u0447\u0438\u043a\u0438=${manipulator.sensor_bits ?? \u0027-\u0027} | \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442\u044b=${manipulator.conflict_bits ?? \u0027-\u0027}`;\nreturn [{ payload: vfdLine }, { payload: conveyorLine }, { payload: manipulatorLine }];",
+        "outputs":  3,
+        "timeout":  0,
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  430,
+        "y":  660,
+        "wires":  [
+                      [
+                          "ui_txt_rs485_scan"
+                      ],
+                      [
+                          "ui_txt_rs485_online"
+                      ],
+                      [
+                          "ui_txt_rs485_devices"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_refresh",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c",
+        "label":  "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c",
+        "order":  1,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#1565c0",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  760,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_status",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u0441\u043a\u0430\u043d\u0435\u0440\u0430",
+        "label":  "\u0421\u043a\u0430\u043d\u0435\u0440",
+        "order":  2,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN STATUS",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#5d4037",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  800,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_on",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "\u0421\u043a\u0430\u043d\u0435\u0440 \u0432\u043a\u043b",
+        "label":  "\u0421\u043a\u0430\u043d\u0435\u0440 \u0432\u043a\u043b",
+        "order":  3,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN ON",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#2e7d32",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  840,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_off",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "\u0421\u043a\u0430\u043d\u0435\u0440 \u0432\u044b\u043a\u043b",
+        "label":  "\u0421\u043a\u0430\u043d\u0435\u0440 \u0432\u044b\u043a\u043b",
+        "order":  4,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN OFF",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#c62828",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  880,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_range",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "\u0414\u0438\u0430\u043f\u0430\u0437\u043e\u043d \u0441\u043a\u0430\u043d\u0435\u0440\u0430",
+        "label":  "\u0414\u0438\u0430\u043f\u0430\u0437\u043e\u043d 11-13",
+        "order":  5,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN RANGE 11 13",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#00897b",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  920,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_btn_rs485_scan_now",
+        "type":  "ui-button",
+        "z":  "tab_master_mqtt",
+        "group":  "ui_group_rs485_cmd",
+        "name":  "\u041e\u043f\u0440\u043e\u0441 \u0441\u0435\u0439\u0447\u0430\u0441",
+        "label":  "\u041e\u043f\u0440\u043e\u0441 \u0441\u0435\u0439\u0447\u0430\u0441",
+        "order":  6,
+        "width":  "2",
+        "height":  "1",
+        "emulateClick":  false,
+        "tooltip":  "",
+        "color":  "",
+        "bgcolor":  "",
+        "className":  "",
+        "icon":  "",
+        "iconPosition":  "left",
+        "payload":  "MBSCAN NOW",
+        "payloadType":  "str",
+        "topic":  "",
+        "topicType":  "str",
+        "buttonColor":  "#ef6c00",
+        "textColor":  "#ffffff",
+        "iconColor":  "",
+        "enableClick":  true,
+        "enablePointerdown":  false,
+        "pointerdownPayload":  "",
+        "pointerdownPayloadType":  "str",
+        "enablePointerup":  false,
+        "pointerupPayload":  "",
+        "pointerupPayloadType":  "str",
+        "x":  430,
+        "y":  960,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_txt_conveyor_resp",
+        "type":  "ui-text",
+        "label":  "\u041e\u0442\u0432\u0435\u0442",
+        "height":  "1",
+        "valueType":  "msg",
+        "color":  "#1b5e20",
+        "group":  "ui_group_manual",
+        "fontSize":  14,
+        "format":  "{{msg.payload}}",
+        "order":  3,
+        "layout":  "row-spread",
+        "font":  "Helvetica",
+        "value":  "msg.payload",
+        "wrapText":  true,
+        "name":  "\u041e\u0442\u0432\u0435\u0442 \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430",
+        "style":  true,
+        "className":  "",
+        "z":  "tab_conveyor_monitor",
+        "width":  "6"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV 1",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  4,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_prog1",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 1",
+        "buttonColor":  "#1565c0",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 1",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV 2",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  5,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_cycle2",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0426\u0438\u043a\u043b 2",
+        "buttonColor":  "#00897b",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 \u0446\u0438\u043a\u043b 2",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV 3",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  6,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_prog3",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u041f\u043e\u0437\u0438\u0446\u0438\u044f 3",
+        "buttonColor":  "#6a1b9a",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 \u043f\u043e\u0437\u0438\u0446\u0438\u044f 3",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV C",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  7,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_shift_c",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0421\u0434\u0432\u0438\u0433 C",
+        "buttonColor":  "#ef6c00",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 \u0441\u0434\u0432\u0438\u0433 C",
+        "group":  "ui_group_manual"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "CONV Z",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  8,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_conv_shift_z",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0412\u043e\u0437\u0432\u0440\u0430\u0442 Z",
+        "buttonColor":  "#c62828",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_conveyor_monitor",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041a\u043e\u043d\u0432\u0435\u0439\u0435\u0440 \u0432\u043e\u0437\u0432\u0440\u0430\u0442 Z",
+        "group":  "ui_group_manual"
+    },
+    {
+        "id":  "0c8d7f16bd7ce401",
+        "type":  "ui-template",
+        "z":  "tab_conveyor_monitor",
+        "group":  "ui_group_manual",
+        "page":  "",
+        "ui":  "",
+        "name":  "\u041a\u0430\u043b\u0438\u0431\u0440\u043e\u0432\u043a\u0430 \u043a\u0430\u0440\u0435\u0442\u043a\u0438 CZ",
+        "order":  9,
+        "width":  "6",
+        "height":  "1",
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv class=\"conv-cz-calibration\"\u003e\n    \u003cv-btn color=\"warning\" variant=\"flat\" block @click=\"dialog = true\"\u003e\n      \u041a\u0430\u043b\u0438\u0431\u0440\u043e\u0432\u043a\u0430 \u043a\u0430\u0440\u0435\u0442\u043a\u0438\n    \u003c/v-btn\u003e\n    \u003cv-dialog v-model=\"dialog\" max-width=\"520\"\u003e\n      \u003cv-card\u003e\n        \u003cv-card-title class=\"text-h6\"\u003e\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u043a\u0430\u043b\u0438\u0431\u0440\u043e\u0432\u043a\u0438\u003c/v-card-title\u003e\n        \u003cv-card-text\u003e\n          \u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u043a\u0430\u043b\u0438\u0431\u0440\u043e\u0432\u043a\u0443 \u043a\u0430\u0440\u0435\u0442\u043a\u0438 \u043a\u043e\u043c\u0430\u043d\u0434\u043e\u0439 \u003ccode\u003eCONV CZ\u003c/code\u003e?\u003cbr\u003e\u041a\u0430\u0440\u0435\u0442\u043a\u0430 \u043f\u0440\u043e\u0439\u0434\u0435\u0442 \u043f\u043e\u0438\u0441\u043a \u043a\u0440\u0430\u0435\u0432 Z \u0438 C. \u0423\u0431\u0435\u0434\u0438\u0442\u0435\u0441\u044c, \u0447\u0442\u043e \u0437\u043e\u043d\u0430 \u0441\u0432\u043e\u0431\u043e\u0434\u043d\u0430.\n        \u003c/v-card-text\u003e\n        \u003cv-card-actions\u003e\n          \u003cv-spacer\u003e\u003c/v-spacer\u003e\n          \u003cv-btn variant=\"text\" @click=\"dialog = false\"\u003e\u041e\u0442\u043c\u0435\u043d\u0430\u003c/v-btn\u003e\n          \u003cv-btn color=\"warning\" variant=\"flat\" @click=\"confirmCalibration\"\u003e\u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c\u003c/v-btn\u003e\n        \u003c/v-card-actions\u003e\n      \u003c/v-card\u003e\n    \u003c/v-dialog\u003e\n  \u003c/div\u003e\n\u003c/template\u003e\n\n\u003cscript\u003e\nexport default {\n    data() {\n        return {\n            dialog: false\n        }\n    },\n    methods: {\n        confirmCalibration() {\n            this.dialog = false\n            this.send({ payload: \u0027CONV CZ\u0027 })\n        }\n    }\n}\n\u003c/script\u003e\n\n\u003cstyle\u003e\n.conv-cz-calibration {\n    width: 100%;\n}\n.conv-cz-calibration .v-btn {\n    width: 100%;\n}\n\u003c/style\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  430,
+        "y":  740,
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_page_manipulator",
+        "ui":  "ui_base_conveyor",
+        "visible":  "true",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440",
+        "type":  "ui-page",
+        "disabled":  "false",
+        "className":  "",
+        "order":  4,
+        "layout":  "grid",
+        "theme":  "ui_theme_conveyor",
+        "path":  "/manipulator",
+        "icon":  "precision_manufacturing",
+        "breakpoints":  [
+                            {
+                                "px":  0,
+                                "name":  "Default",
+                                "cols":  3
+                            },
+                            {
+                                "px":  576,
+                                "name":  "Tablet",
+                                "cols":  6
+                            },
+                            {
+                                "px":  768,
+                                "name":  "Small Desktop",
+                                "cols":  9
+                            },
+                            {
+                                "px":  1024,
+                                "name":  "Desktop",
+                                "cols":  12
+                            }
+                        ]
+    },
+    {
+        "width":  "6",
+        "height":  "1",
+        "id":  "ui_group_man_status",
+        "type":  "ui-group",
+        "visible":  "true",
+        "order":  0,
+        "disabled":  "false",
+        "page":  "ui_page_manipulator",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440\u0430",
+        "showTitle":  true,
+        "className":  "",
+        "groupType":  "default"
+    },
+    {
+        "width":  "6",
+        "height":  "1",
+        "id":  "ui_group_man_cmd",
+        "type":  "ui-group",
+        "visible":  "true",
+        "order":  1,
+        "disabled":  "false",
+        "page":  "ui_page_manipulator",
+        "name":  "\u041a\u043e\u043c\u0430\u043d\u0434\u044b \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440\u0430",
+        "showTitle":  true,
+        "className":  "",
+        "groupType":  "default"
+    },
+    {
+        "topic":  "fyl/master_com12/status",
+        "id":  "mqtt_in_manip_status",
+        "y":  1040,
+        "nl":  false,
+        "datatype":  "auto-detect",
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440\u0430 \u0447\u0435\u0440\u0435\u0437 \u043c\u0430\u0441\u0442\u0435\u0440",
+        "type":  "mqtt in",
+        "z":  "tab_master_mqtt",
+        "inputs":  0,
+        "x":  190,
+        "broker":  "mqtt_broker_master1884",
+        "wires":  [
+                      [
+                          "fn_manip_status"
+                      ]
+                  ],
+        "rap":  true,
+        "qos":  "1",
+        "rh":  0
+    },
+    {
+        "id":  "fn_manip_status",
+        "y":  1040,
+        "initialize":  "",
+        "name":  "\u0424\u043e\u0440\u043c\u0430\u0442 \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440\u0430",
+        "type":  "function",
+        "z":  "tab_master_mqtt",
+        "noerr":  0,
+        "x":  430,
+        "finalize":  "",
+        "wires":  [
+                      [
+                          "ui_txt_manip_status"
+                      ]
+                  ],
+        "timeout":  0,
+        "outputs":  1,
+        "func":  "let p = msg.payload;\nif (typeof p === \u0027string\u0027) {\n  try { p = JSON.parse(p); } catch (e) { return null; }\n}\nif (!p || typeof p !== \u0027object\u0027) return null;\nconst dev = (p.devices \u0026\u0026 p.devices.manipulator) ? p.devices.manipulator : {};\nconst online = dev.online ? \u0027\u0432 \u0441\u0435\u0442\u0438\u0027 : \u0027\u043d\u0435 \u0432 \u0441\u0435\u0442\u0438\u0027;\nconst proto = dev.kind_ok ? \u0027\u043d\u043e\u0440\u043c\u0430\u0027 : \u0027\u043e\u0448\u0438\u0431\u043a\u0430\u0027;\nmsg.payload = `\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440: ${online} | \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b=${proto} | \u0441\u0442\u0430\u0442\u0443\u0441=${dev.status_word ?? \u0027-\u0027} | \u043e\u0448\u0438\u0431\u043a\u0430=${dev.error_word ?? \u0027-\u0027} | \u0440\u0435\u0436\u0438\u043c=${dev.mode ?? \u0027-\u0027} | \u0437\u0430\u0434\u0430\u0447\u0430=${dev.job ?? \u0027-\u0027} | \u0434\u0430\u0442\u0447\u0438\u043a\u0438=${dev.sensor_bits ?? \u0027-\u0027} | \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442\u044b=${dev.conflict_bits ?? \u0027-\u0027}`;\nreturn msg;",
+        "libs":  [
+
+                 ]
+    },
+    {
+        "id":  "ui_txt_manip_status",
+        "type":  "ui-text",
+        "label":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 (13)",
+        "height":  "1",
+        "valueType":  "msg",
+        "color":  "#2c3e50",
+        "group":  "ui_group_man_status",
+        "fontSize":  16,
+        "format":  "{{msg.payload}}",
+        "order":  1,
+        "layout":  "row-spread",
+        "font":  "Helvetica",
+        "value":  "msg.payload",
+        "wrapText":  true,
+        "name":  "\u0421\u0442\u0430\u0442\u0443\u0441 \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440\u0430",
+        "style":  true,
+        "className":  "",
+        "z":  "tab_master_mqtt",
+        "width":  "6"
+    },
+    {
+        "id":  "ui_txt_manip_resp",
+        "type":  "ui-text",
+        "label":  "\u041e\u0442\u0432\u0435\u0442",
+        "height":  "1",
+        "valueType":  "msg",
+        "color":  "#1b5e20",
+        "group":  "ui_group_man_status",
+        "fontSize":  14,
+        "format":  "{{msg.payload}}",
+        "order":  2,
+        "layout":  "row-spread",
+        "font":  "Helvetica",
+        "value":  "msg.payload",
+        "wrapText":  true,
+        "name":  "\u041e\u0442\u0432\u0435\u0442 \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440\u0430",
+        "style":  true,
+        "className":  "",
+        "z":  "tab_master_mqtt",
+        "width":  "6"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN W",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  3,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_up",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0412\u0432\u0435\u0440\u0445",
+        "buttonColor":  "#1565c0",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 \u0432\u0432\u0435\u0440\u0445",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN S",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  4,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_down",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0412\u043d\u0438\u0437",
+        "buttonColor":  "#1565c0",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 \u0432\u043d\u0438\u0437",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN A",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  5,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_left",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0412\u043b\u0435\u0432\u043e",
+        "buttonColor":  "#00897b",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 \u0432\u043b\u0435\u0432\u043e",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN D",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  6,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_right",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0412\u043f\u0440\u0430\u0432\u043e",
+        "buttonColor":  "#00897b",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 \u0432\u043f\u0440\u0430\u0432\u043e",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN Q",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  7,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_open",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0417\u0430\u0445\u0432\u0430\u0442 \u043e\u0442\u043a\u0440\u044b\u0442\u044c",
+        "buttonColor":  "#2e7d32",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u0417\u0430\u0445\u0432\u0430\u0442 \u043e\u0442\u043a\u0440\u044b\u0442\u044c",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN E",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  8,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_close",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0417\u0430\u0445\u0432\u0430\u0442 \u0437\u0430\u043a\u0440\u044b\u0442\u044c",
+        "buttonColor":  "#2e7d32",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u0417\u0430\u0445\u0432\u0430\u0442 \u0437\u0430\u043a\u0440\u044b\u0442\u044c",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN R",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  9,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_run",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0420\u0430\u0431\u043e\u0447\u0438\u0439 \u0446\u0438\u043a\u043b",
+        "buttonColor":  "#ef6c00",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 \u0440\u0430\u0431\u043e\u0447\u0438\u0439 \u0446\u0438\u043a\u043b",
+        "group":  "ui_group_man_cmd"
+    },
+    {
+        "iconPosition":  "left",
+        "textColor":  "#ffffff",
+        "icon":  "",
+        "payload":  "MAN Z",
+        "pointerupPayload":  "",
+        "className":  "",
+        "width":  "3",
+        "order":  10,
+        "enablePointerdown":  false,
+        "enablePointerup":  false,
+        "bgcolor":  "",
+        "type":  "ui-button",
+        "id":  "ui_btn_man_stop",
+        "pointerdownPayloadType":  "str",
+        "pointerdownPayload":  "",
+        "label":  "\u0421\u0442\u043e\u043f",
+        "buttonColor":  "#c62828",
+        "height":  "1",
+        "wires":  [
+                      [
+                          "mqtt_out_master_cmd"
+                      ]
+                  ],
+        "tooltip":  "",
+        "topic":  "",
+        "payloadType":  "str",
+        "pointerupPayloadType":  "str",
+        "z":  "tab_master_mqtt",
+        "color":  "",
+        "emulateClick":  false,
+        "iconColor":  "",
+        "enableClick":  true,
+        "topicType":  "str",
+        "name":  "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0442\u043e\u0440 \u0441\u0442\u043e\u043f",
+        "group":  "ui_group_man_cmd"
+    }
+]
