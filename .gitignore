@@ -23,3 +23,6 @@ bin/*.bin
 # Local caches
 Thumbs.db
 .DS_Store
+**/.cache/
+**/compile_commands.json
+.cursor/
