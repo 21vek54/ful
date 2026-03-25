@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@flowfuse/node-red-dashboard": "^1.30.2"
+  }
+}
