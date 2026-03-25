@@ -1,0 +1,509 @@
+[
+    {
+        "id": "tab_master_com12_minimal",
+        "type": "tab",
+        "label": "master_com12 minimal",
+        "disabled": false,
+        "info": "??????????? ??????: status + online ??? master_com12"
+    },
+    {
+        "id": "comment_master_com12_minimal",
+        "type": "comment",
+        "z": "tab_master_com12_minimal",
+        "name": "??????",
+        "info": "fyl/master_com12/status\nfyl/master_com12/online",
+        "x": 130,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "mqtt_in_master_status_minimal",
+        "type": "mqtt in",
+        "z": "tab_master_com12_minimal",
+        "name": "master status",
+        "topic": "fyl/master_com12/status",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker_master1884_minimal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 140,
+        "wires": [
+            [
+                "debug_status_raw_minimal",
+                "func_parse_status_minimal"
+            ]
+        ]
+    },
+    {
+        "id": "func_parse_status_minimal",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "name": "parse status + boards",
+        "func": "let payload = msg.payload;\nif (typeof payload === \"string\") {\n    try {\n        payload = JSON.parse(payload);\n    } catch (err) {\n        node.warn(\"status JSON parse error: \" + err.message);\n        return null;\n    }\n}\n\nif (!payload || typeof payload !== \"object\") {\n    return null;\n}\n\nfunction normalizeBoard(value) {\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\") return \"online\";\n    if (text === \"offline\") return \"offline\";\n    return \"unknown\";\n}\n\nmsg.payload = {\n    wifi: !!payload.wifi,\n    mqtt: !!payload.mqtt,\n    board12: normalizeBoard(payload.board12),\n    board13: normalizeBoard(payload.board13),\n    receivedAt: new Date().toISOString()\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 140,
+        "wires": [
+            [
+                "debug_status_parsed_minimal",
+                "func_operator_model_minimal"
+            ]
+        ]
+    },
+    {
+        "id": "debug_status_raw_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "status raw",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 370,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "debug_status_parsed_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "status parsed boards",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 650,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "mqtt_in_master_online_minimal",
+        "type": "mqtt in",
+        "z": "tab_master_com12_minimal",
+        "name": "master online",
+        "topic": "fyl/master_com12/online",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker_master1884_minimal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 240,
+        "wires": [
+            [
+                "debug_online_raw_minimal",
+                "func_parse_online_minimal"
+            ]
+        ]
+    },
+    {
+        "id": "func_parse_online_minimal",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "name": "parse online",
+        "func": "const rawValue = msg.payload;\nconst text = String(rawValue ?? \"\").trim().toLowerCase();\nmsg.payload = {\n    online: text === \"online\" || text === \"true\" || text === \"1\",\n    normalized: text,\n    raw: rawValue,\n    receivedAt: new Date().toISOString()\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 240,
+        "wires": [
+            [
+                "debug_online_parsed_minimal",
+                "func_operator_model_minimal"
+            ]
+        ]
+    },
+    {
+        "id": "debug_online_raw_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "online raw",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 350,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "debug_online_parsed_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "online parsed",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 640,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "mqtt_broker_master1884_minimal",
+        "type": "mqtt-broker",
+        "name": "Local Mosquitto 1884",
+        "broker": "127.0.0.1",
+        "port": "1884",
+        "clientid": "nodered_master_com12_minimal",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "allowInstall": false,
+        "id": "ui_base_master_com12_minimal",
+        "showPathInSidebar": false,
+        "showReconnectNotification": true,
+        "includeClientData": true,
+        "appIcon": "",
+        "name": "master_com12 operator",
+        "type": "ui-base",
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "notificationDisplayTime": 1,
+        "showDisconnectNotification": true,
+        "navigationStyle": "default",
+        "path": "/dashboard",
+        "titleBarStyle": "default",
+        "headerContent": "page"
+    },
+    {
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "8px",
+            "widgetGap": "8px"
+        },
+        "name": "master_com12 theme",
+        "id": "ui_theme_master_com12_minimal",
+        "type": "ui-theme",
+        "colors": {
+            "surface": "#ffffff",
+            "primary": "#008a5a",
+            "bgPage": "#f3f6f8",
+            "groupBg": "#ffffff",
+            "groupOutline": "#d3dbe2"
+        }
+    },
+    {
+        "id": "ui_page_master_com12_minimal",
+        "ui": "ui_base_master_com12_minimal",
+        "visible": "true",
+        "name": "master_com12",
+        "type": "ui-page",
+        "disabled": "false",
+        "className": "",
+        "order": 0,
+        "layout": "grid",
+        "theme": "ui_theme_master_com12_minimal",
+        "path": "/master-com12",
+        "icon": "home",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": 0,
+                "cols": 3
+            },
+            {
+                "name": "Tablet",
+                "px": 576,
+                "cols": 6
+            },
+            {
+                "name": "Small Desktop",
+                "px": 768,
+                "cols": 9
+            },
+            {
+                "name": "Desktop",
+                "px": 1024,
+                "cols": 12
+            }
+        ]
+    },
+    {
+        "width": 12,
+        "height": 1,
+        "id": "ui_group_master_com12_minimal",
+        "type": "ui-group",
+        "visible": true,
+        "order": 0,
+        "disabled": false,
+        "page": "ui_page_master_com12_minimal",
+        "name": "????????? master_com12",
+        "showTitle": true,
+        "className": "",
+        "groupType": "default"
+    },
+    {
+        "id": "comment_dashboard_master_com12_minimal",
+        "y": 340,
+        "info": "???????????? ????????: /dashboard/master-com12",
+        "name": "Dashboard",
+        "type": "comment",
+        "z": "tab_master_com12_minimal",
+        "x": 120,
+        "wires": []
+    },
+    {
+        "topic": "operator/init",
+        "id": "inject_operator_init_minimal",
+        "y": 380,
+        "onceDelay": "0.5",
+        "repeat": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "once": true,
+        "crontab": "",
+        "name": "init operator state",
+        "type": "inject",
+        "z": "tab_master_com12_minimal",
+        "x": 140,
+        "payload": "{}",
+        "wires": [
+            "func_operator_model_minimal"
+        ],
+        "payloadType": "json"
+    },
+    {
+        "id": "func_operator_model_minimal",
+        "y": 380,
+        "initialize": "",
+        "name": "operator state model",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "noerr": 0,
+        "x": 400,
+        "finalize": "",
+        "wires": [
+            [
+                "ui_text_board12_minimal"
+            ],
+            [
+                "ui_text_board13_minimal"
+            ],
+            [
+                "ui_text_wifi_minimal"
+            ],
+            [
+                "ui_text_mqtt_minimal"
+            ],
+            [
+                "ui_text_master_online_minimal"
+            ],
+            [
+                "ui_text_last_update_minimal"
+            ]
+        ],
+        "timeout": "",
+        "outputs": 6,
+        "func": "let state = flow.get(\"masterOperatorState\");\nif (!state) {\n    state = {\n        board12: \"unknown\",\n        board13: \"unknown\",\n        wifi: \"unknown\",\n        mqtt: \"unknown\",\n        masterOnline: \"unknown\",\n        lastUpdate: \"unknown\"\n    };\n}\n\nfunction normalizeStatus(value) {\n    if (value === true) return \"online\";\n    if (value === false) return \"offline\";\n\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\" || text === \"1\" || text === \"true\") return \"online\";\n    if (text === \"offline\" || text === \"0\" || text === \"false\") return \"offline\";\n    return \"unknown\";\n}\n\nconst payload = msg.payload;\nif (payload && typeof payload === \"object\") {\n    if (Object.prototype.hasOwnProperty.call(payload, \"board12\")) {\n        state.board12 = normalizeStatus(payload.board12);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"board13\")) {\n        state.board13 = normalizeStatus(payload.board13);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"wifi\")) {\n        state.wifi = normalizeStatus(payload.wifi);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"mqtt\")) {\n        state.mqtt = normalizeStatus(payload.mqtt);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"online\")) {\n        state.masterOnline = normalizeStatus(payload.online);\n    }\n}\n\nif (msg.topic !== \"operator/init\") {\n    state.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\n}\n\nflow.set(\"masterOperatorState\", state);\n\nfunction makeMsg(value) {\n    return { payload: value };\n}\n\nreturn [\n    makeMsg(state.board12),\n    makeMsg(state.board13),\n    makeMsg(state.wifi),\n    makeMsg(state.mqtt),\n    makeMsg(state.masterOnline),\n    makeMsg(state.lastUpdate)\n];",
+        "libs": []
+    },
+    {
+        "height": 1,
+        "id": "ui_text_board12_minimal",
+        "type": "ui-text",
+        "wires": [],
+        "width": 6,
+        "y": 330,
+        "layout": "row-spread",
+        "color": "#374151",
+        "order": 1,
+        "name": "board12",
+        "label": "board12",
+        "style": false,
+        "value": "payload",
+        "font": "Helvetica",
+        "z": "tab_master_com12_minimal",
+        "wrapText": false,
+        "group": "ui_group_master_com12_minimal",
+        "className": "",
+        "valueType": "msg",
+        "fontSize": 16,
+        "format": "{{msg.payload}}",
+        "x": 690
+    },
+    {
+        "height": 1,
+        "id": "ui_text_board13_minimal",
+        "type": "ui-text",
+        "wires": [],
+        "width": 6,
+        "y": 360,
+        "layout": "row-spread",
+        "color": "#374151",
+        "order": 2,
+        "name": "board13",
+        "label": "board13",
+        "style": false,
+        "value": "payload",
+        "font": "Helvetica",
+        "z": "tab_master_com12_minimal",
+        "wrapText": false,
+        "group": "ui_group_master_com12_minimal",
+        "className": "",
+        "valueType": "msg",
+        "fontSize": 16,
+        "format": "{{msg.payload}}",
+        "x": 690
+    },
+    {
+        "height": 1,
+        "id": "ui_text_wifi_minimal",
+        "type": "ui-text",
+        "wires": [],
+        "width": 6,
+        "y": 390,
+        "layout": "row-spread",
+        "color": "#374151",
+        "order": 3,
+        "name": "wifi",
+        "label": "wifi",
+        "style": false,
+        "value": "payload",
+        "font": "Helvetica",
+        "z": "tab_master_com12_minimal",
+        "wrapText": false,
+        "group": "ui_group_master_com12_minimal",
+        "className": "",
+        "valueType": "msg",
+        "fontSize": 16,
+        "format": "{{msg.payload}}",
+        "x": 690
+    },
+    {
+        "height": 1,
+        "id": "ui_text_mqtt_minimal",
+        "type": "ui-text",
+        "wires": [],
+        "width": 6,
+        "y": 420,
+        "layout": "row-spread",
+        "color": "#374151",
+        "order": 4,
+        "name": "mqtt",
+        "label": "mqtt",
+        "style": false,
+        "value": "payload",
+        "font": "Helvetica",
+        "z": "tab_master_com12_minimal",
+        "wrapText": false,
+        "group": "ui_group_master_com12_minimal",
+        "className": "",
+        "valueType": "msg",
+        "fontSize": 16,
+        "format": "{{msg.payload}}",
+        "x": 690
+    },
+    {
+        "height": 1,
+        "id": "ui_text_master_online_minimal",
+        "type": "ui-text",
+        "wires": [],
+        "width": 6,
+        "y": 450,
+        "layout": "row-spread",
+        "color": "#374151",
+        "order": 5,
+        "name": "master online",
+        "label": "master online",
+        "style": false,
+        "value": "payload",
+        "font": "Helvetica",
+        "z": "tab_master_com12_minimal",
+        "wrapText": false,
+        "group": "ui_group_master_com12_minimal",
+        "className": "",
+        "valueType": "msg",
+        "fontSize": 16,
+        "format": "{{msg.payload}}",
+        "x": 700
+    },
+    {
+        "height": 1,
+        "id": "ui_text_last_update_minimal",
+        "type": "ui-text",
+        "wires": [],
+        "width": 12,
+        "y": 480,
+        "layout": "row-left",
+        "color": "#6b7280",
+        "order": 6,
+        "name": "last update",
+        "label": "last update",
+        "style": false,
+        "value": "payload",
+        "font": "Helvetica",
+        "z": "tab_master_com12_minimal",
+        "wrapText": false,
+        "group": "ui_group_master_com12_minimal",
+        "className": "",
+        "valueType": "msg",
+        "fontSize": 14,
+        "format": "{{msg.payload}}",
+        "x": 700
+    }
+]

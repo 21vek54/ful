@@ -26,3 +26,15 @@ Thumbs.db
 **/.cache/
 **/compile_commands.json
 .cursor/
+
+# Project-local infra runtime
+infra/node-red/userdir/node_modules/
+infra/node-red/userdir/lib/
+infra/node-red/userdir/node-red.err.log
+infra/node-red/userdir/node-red.out.log
+infra/node-red/userdir/flows_cred.json
+infra/node-red/userdir/flows_cred.*.json
+infra/node-red/userdir/.config.runtime.json
+infra/node-red/backups/
+infra/mosquitto/data/
+infra/mosquitto/log/
