@@ -1,16 +1,20 @@
 {
   "folders": [
     {
-      "path": "conveyor_control_com10"
+      "name": "fyl (repo)",
+      "path": "."
     },
     {
-      "path": "manipulator_com11"
+      "name": "conveyor_control_com10",
+      "path": "firmware/conveyor_control_com10"
     },
     {
-      "path": "master_control_com12"
+      "name": "manipulator_com11",
+      "path": "firmware/manipulator_com11"
     },
     {
-      "path": "Plan"
+      "name": "master_control_com12",
+      "path": "firmware/master_control_com12"
     }
   ],
   "settings": {}

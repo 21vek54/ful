@@ -1,7 +1,7 @@
 @echo off
 setlocal
 chcp 65001 >nul
-cd /d "%~dp0manipulator_com11"
+cd /d "%~dp0..\..\firmware\manipulator_com11"
 echo [FLASH] manipulator_com11 (COM11)
 pio run -t upload
 set ERR=%ERRORLEVEL%

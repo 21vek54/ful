@@ -4,6 +4,7 @@
 #include <Preferences.h>
 
 #include "app/cli_handler.h"
+#include "app/board_monitor.h"
 #include "app/conveyor_status_runtime.h"
 #include "app/cycle_control.h"
 #include "app/manual_runtime.h"
@@ -352,4 +353,5 @@ void firmwareLoop()
     groups::infeed::processInfeedGroup();
     groups::outfeed::processOutfeedGroup();
     groups::sealer::processSealerGroup();
+    app::processBoardMonitor();
 }

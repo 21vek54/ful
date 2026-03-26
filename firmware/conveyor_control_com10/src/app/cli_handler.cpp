@@ -1,4 +1,5 @@
 #include "app/cli_handler.h"
+#include "app/board_monitor.h"
 #include "core/settings.h"
 #include "app/manual_runtime.h"
 
@@ -6,6 +7,7 @@
 
 #include "groups/outfeed/outfeed_group.h"
 #include "groups/sealer/sealer_group.h"
+#include "legacy/program1.h"
 
 namespace {
 
@@ -132,6 +134,31 @@ bool parseMoveDistanceSteps(const String &args, const String &cmd, const char *e
     return true;
 }
 
+bool parseOtcycleStartArgs(const String &args, const char *example, uint32_t &cyclesRaw, uint32_t &stepsRaw)
+{
+    String cyclesTok;
+    String stepsTok;
+    splitCommandLine(args, cyclesTok, stepsTok);
+
+    if (!cyclesTok.isEmpty() && !parseUnsigned(cyclesTok, cyclesRaw)) {
+        Serial.print("Format error. Example: ");
+        Serial.println(example);
+        return false;
+    }
+    if (!stepsTok.isEmpty() && !parseUnsigned(stepsTok, stepsRaw)) {
+        Serial.print("Format error. Example: ");
+        Serial.println(example);
+        return false;
+    }
+    if (cyclesRaw > 255U) {
+        Serial.print("Format error. Example: ");
+        Serial.println(example);
+        return false;
+    }
+
+    return true;
+}
+
 bool tryHandleDistanceMoveCommand(const String &cmd, const String &args)
 {
     uint32_t steps = 0;
@@ -197,6 +224,89 @@ bool tryHandleShiftCommand(const String &cmd)
 
 bool tryHandleServiceCommand(const String &cmd, const String &args)
 {
+    if (cmd == "P1OT" || cmd == "1OT") {
+        uint32_t cyclesRaw = core::g_settings.otvodCycleDefaultTotal;
+        uint32_t stepsRaw = core::g_settings.step2DivertSteps;
+
+        if (!parseOtcycleStartArgs(args, "P1OT 3 920", cyclesRaw, stepsRaw)) {
+            return true;
+        }
+
+        if (program1GetStateCode() != 0U) {
+            Serial.println("P1OT: программа 1 уже выполняется.");
+            return true;
+        }
+        if (!program1IsShiftCalibrated()) {
+            Serial.println("P1OT: сначала выполни CZ, чтобы откалибровать сдвиг.");
+            return true;
+        }
+        if (program1IsSystemBusy()) {
+            Serial.println("P1OT: отказ, система уже выполняет движение.");
+            return true;
+        }
+        if (app::manual::isConveyorBusy()) {
+            Serial.println("P1OT: конвейер занят, общий запуск запрещен.");
+            return true;
+        }
+
+        if (!groups::outfeed::startOtvodCycle(
+                static_cast<uint8_t>(cyclesRaw), stepsRaw, app::manual::isConveyorBusy())) {
+            return true;
+        }
+
+        Serial.println("P1OT: общий запуск OTCYCLE + 1.");
+        app::manual::startProgram1();
+        if (program1GetStateCode() == 0U) {
+            groups::outfeed::abortOtvodCycle("P1OT: программа 1 не стартовала, OTCYCLE отменен.", true);
+        }
+        return true;
+    }
+
+    if (cmd == "MON" || cmd == "MONITOR") {
+        String subCmd;
+        String unusedArgs;
+        splitCommandLine(args, subCmd, unusedArgs);
+
+        if (subCmd.isEmpty()) {
+            const bool enabled = app::toggleBoardMonitorStream();
+            Serial.println(enabled ? "Board monitor ON." : "Board monitor OFF.");
+            if (enabled) {
+                app::printBoardMonitorSnapshot();
+            }
+            return true;
+        }
+
+        if (subCmd == "ON") {
+            app::setBoardMonitorStreamEnabled(true);
+            Serial.println("Board monitor ON.");
+            app::printBoardMonitorSnapshot();
+            return true;
+        }
+
+        if (subCmd == "OFF" || subCmd == "STOP") {
+            app::setBoardMonitorStreamEnabled(false);
+            Serial.println("Board monitor OFF.");
+            return true;
+        }
+
+        if (subCmd == "STATUS" || subCmd == "NOW" || subCmd == "SHOW") {
+            app::printBoardMonitorSnapshot();
+            return true;
+        }
+
+        if (subCmd == "HELP" || subCmd == "H") {
+            Serial.println("MONITOR commands:");
+            Serial.println("  MONITOR         - вкл/выкл поток loop/heap/reset раз в 1 сек");
+            Serial.println("  MONITOR ON      - включить поток");
+            Serial.println("  MONITOR OFF     - выключить поток");
+            Serial.println("  MONITOR STATUS  - вывести 1 строку loop/heap/reset");
+            return true;
+        }
+
+        Serial.println("Usage: MONITOR | MONITOR ON | MONITOR OFF | MONITOR STATUS");
+        return true;
+    }
+
     if (cmd == "SEAL") {
         String subCmd;
         String subArgs;
@@ -292,20 +402,7 @@ bool tryHandleServiceCommand(const String &cmd, const String &args)
             uint32_t cyclesRaw = core::g_settings.otvodCycleDefaultTotal;
             uint32_t stepsRaw = core::g_settings.step2DivertSteps;
 
-            String cyclesTok;
-            String stepsTok;
-            splitCommandLine(subArgs, cyclesTok, stepsTok);
-
-            if (!cyclesTok.isEmpty() && !parseUnsigned(cyclesTok, cyclesRaw)) {
-                Serial.println("Format error. Example: OTCYCLE START 3 920");
-                return true;
-            }
-            if (!stepsTok.isEmpty() && !parseUnsigned(stepsTok, stepsRaw)) {
-                Serial.println("Format error. Example: OTCYCLE START 3 920");
-                return true;
-            }
-            if (cyclesRaw > 255U) {
-                Serial.println("Format error. Example: OTCYCLE START 3 920");
+            if (!parseOtcycleStartArgs(subArgs, "OTCYCLE START 3 920", cyclesRaw, stepsRaw)) {
                 return true;
             }
             (void)groups::outfeed::startOtvodCycle(
@@ -576,6 +673,7 @@ void printHelp()
     Serial.println("    STEP2STOP  - остановить GPIO19");
     Serial.println("    STOP2      - остановить STEP2");
     Serial.println("    OTCYCLE START [cycles] [steps] - локальный цикл отвода: OTVOD -> основной, по умолчанию 3x920");
+    Serial.println("    P1OT [cycles] [steps] - одновременно запустить 1 и OTCYCLE START, по умолчанию 3x920");
     Serial.println("    OTCYCLE STATUS               - показать состояние локального цикла отвода");
     Serial.println("    OTCYCLE STOP                 - остановить локальный цикл отвода");
     Serial.println("  Реле / частотник:");
@@ -598,6 +696,8 @@ void printHelp()
     Serial.println("    E          - вкл/выкл поток датчиков: E18 + герконы Z/C, каждые 0.5 сек");
     Serial.println("  Сервис:");
     Serial.println("    H          - помощь");
+    Serial.println("    MONITOR    - вкл/выкл поток loop/heap/reset, 1 строка в 1 сек");
+    Serial.println("    MONITOR STATUS - вывести 1 строку loop/heap/reset без запуска потока");
     Serial.println("    I2C status - addr 12, SDA=GPIO16, SCL=GPIO17");
     Serial.println("Команды не чувствительны к регистру.");
 }
@@ -616,6 +716,7 @@ void handleCommand(String line)
     if (app::manual::isOtvodCycleActive()) {
         const bool commandAllowedDuringOtvodCycle =
             (cmd == "OTCYCLE" || cmd == "H" || cmd == "E" ||
+             cmd == "MON" || cmd == "MONITOR" ||
              cmd == "VFDTICK" || cmd == "R1OFF" || cmd == "VFDSTOP" ||
              cmd == "STOP2" || cmd == "STEP2STOP");
         if (!commandAllowedDuringOtvodCycle) {
