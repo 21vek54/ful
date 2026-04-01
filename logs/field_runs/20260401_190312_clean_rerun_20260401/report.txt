@@ -1,0 +1,77 @@
+fyl field run report: SEAL DONE wait-done manual button validation
+run_start=2026-04-01 19:03:12.759
+run_end=2026-04-01 19:08:16.801
+
+[START STATUS]
+COM12 COMMON STATUS: 2026-04-01 19:03:21.126 COMMON: active=yes, pause=no, pause_state=none, stage=wait_manip_step7, manip_starts=2, parallel_starts=1, batch_seq=32767, conveyor_ready=no, conveyor_seq=1, feed_empty_strict=no, feed_empty_valid=no, conveyor_p1_state=0, conveyor_p1_pass=0, manip_busy=no, manip_step3=no, manip_step7=no, manip_step=1, otvod_ready=yes, sealer_done_pending_unload=no, seal_age_ms=429393, i2c_last=read@scan/ok/3ms, last=COMMON: manipulator start (next batch ready)
+COM12 OTCYCLE STATUS: 2026-04-01 19:03:21.767 OTCYCLE: active=no, ready=yes, step=3/3/3, vfd=3/3, steps=920, tick_ms=2190, last=OTCYCLE completed: 3 cycles finished
+COM12 SEAL STATUS: 2026-04-01 19:03:20.812 SEAL: start_out=off, done=inactive, busy=no, owner=conveyor(12), online=yes, pulse_ms=300
+COM10 SEAL STATUS: 2026-04-01 19:03:22.194 SEAL: run_state=idle, start_out=off, done=inactive, done_raw=inactive, done_filtered=inactive, done_pin_level=HIGH, done_active_level=LOW, done_filter_ms=500, pulse_ms=300, wait_done=no, wait_age_ms=0, wait_hb_seq=0, completion_blocked=no, block_reason=not_waiting_done, completion_seq=2, last_completion=physical, last_completion_ms=451755, edges_raw=3/3, edges_effective=2/2, raw_last_rise_ms=451255, raw_last_fall_ms=452847, eff_last_rise_ms=451755, eff_last_fall_ms=456322, ignored_rise_outside_wait=0, ignored_last_ms=0, emu_pending=no, emu_hold=no, emu_remaining_ms=0, emu_delay_ms=0, emu_hold_ms=0, start_pin=22, done_pin=34
+COM10 OTCYCLE STATUS: 2026-04-01 19:03:22.501 OTCYCLE: active=no, phase=idle, ready=yes, step=0/0/3, main=0/0, steps=920, tick_ms=2190, last=idle
+COM10 done_filter_ms: 500
+COM11 pose right_pressed: <none>
+COM11 pose z_up: <none>
+COM11 pose grip_open: <none>
+
+[RUN METRICS]
+common_start_cmd_ts: 2026-04-01 19:03:23.189
+common_start_seen: True
+wait_done_entries: 0
+wait_done_status_samples: 0
+wait_done_heartbeats: 0
+valid_completion_count: 0
+synthetic_completion_count: 0
+outside_waitdone_count: 0
+done_raw_active_count: 0
+done_raw_released_count: 0
+done_eff_released_count: 0
+manip_work_events: 10
+common_progress_after_done: True
+common_progress_line: 2026-04-01 19:03:21.126 COMMON: active=yes, pause=no, pause_state=none, stage=wait_manip_step7, manip_starts=2, parallel_starts=1, batch_seq=32767, conveyor_ready=no, conveyor_seq=1, feed_empty_strict=no, feed_empty_valid=no, conveyor_p1_state=0, conveyor_p1_pass=0, manip_busy=no, manip_step3=no, manip_step7=no, manip_step=1, otvod_ready=yes, sealer_done_pending_unload=no, seal_age_ms=429393, i2c_last=read@scan/ok/3ms, last=COMMON: manipulator start (next batch ready)
+vfdtick_timeout_count: 0
+otcycle_failed_count: 0
+i2c_recover_count: 0
+
+[FIRST EVENTS]
+first_wait_done: <none>
+first_completion: <none>
+first_vfdtick_timeout: <none>
+first_otcycle_failed: <none>
+
+[LAST LINES BEFORE STOP]
+COM12:
+  2026-04-01 19:08:15.807 COMMON TRACE: waiting stage=wait_manip_step7, stage_ms=720077, pause=none, conveyor_online=yes, manip_online=yes, otvod_ready=yes, sealer_pending_unload=no, seal_stable=no, feed_known=no, feed_empty=no
+  2026-04-01 19:08:15.860 HEARTBEAT: stage=rs485_diag, stage_ms=1, common=wait_manip_step7, i2c_seq=2495, i2c_active=no, i2c_last=read@scan/ok
+  2026-04-01 19:08:16.758 I2C TRACE: start seq=2496, op=read, id=12, origin=scan, detail=managed frame
+  2026-04-01 19:08:16.763 I2C TRACE: wire seq=2496, id=12, origin=scan, phase=pre_begin_tx
+  2026-04-01 19:08:16.769 I2C TRACE: wire seq=2496, id=12, origin=scan, phase=post_end_tx, value=0
+  2026-04-01 19:08:16.777 I2C TRACE: wire seq=2496, id=12, origin=scan, phase=pre_request, value=28
+  2026-04-01 19:08:16.781 I2C TRACE: wire seq=2496, id=12, origin=scan, phase=post_request, value=28
+  2026-04-01 19:08:16.788 I2C TRACE: wire seq=2496, id=12, origin=scan, phase=read_begin, value=28
+  2026-04-01 19:08:16.796 I2C TRACE: wire seq=2496, id=12, origin=scan, phase=read_done, value=28
+  2026-04-01 19:08:16.801 I2C TRACE: done seq=2496, op=read, id=12, result=ok, ms=36, loop_stage=scan, common_stage=wait_manip_step7, pause=none
+COM10:
+  2026-04-01 19:07:37.921 SEAL: run_state=idle, start_out=off, done=inactive, done_raw=inactive, done_filtered=inactive, done_pin_level=HIGH, done_active_level=LOW, done_filter_ms=500, pulse_ms=300, wait_done=no, wait_age_ms=0, wait_hb_seq=0, completion_blocked=no, block_reason=not_waiting_done, completion_seq=2, last_completion=physical, last_completion_ms=451755, edges_raw=3/3, edges_effective=2/2, raw_last_rise_ms=451255, raw_last_fall_ms=452847, eff_last_rise_ms=451755, eff_last_fall_ms=456322, ignored_rise_outside_wait=0, ignored_last_ms=0, emu_pending=no, emu_hold=no, emu_remaining_ms=0, emu_delay_ms=0, emu_hold_ms=0, start_pin=22, done_pin=34
+  2026-04-01 19:07:38.227 OTCYCLE: active=no, phase=idle, ready=yes, step=0/0/3, main=0/0, steps=920, tick_ms=2190, last=idle
+  2026-04-01 19:07:49.947 SEAL: run_state=idle, start_out=off, done=inactive, done_raw=inactive, done_filtered=inactive, done_pin_level=HIGH, done_active_level=LOW, done_filter_ms=500, pulse_ms=300, wait_done=no, wait_age_ms=0, wait_hb_seq=0, completion_blocked=no, block_reason=not_waiting_done, completion_seq=2, last_completion=physical, last_completion_ms=451755, edges_raw=3/3, edges_effective=2/2, raw_last_rise_ms=451255, raw_last_fall_ms=452847, eff_last_rise_ms=451755, eff_last_fall_ms=456322, ignored_rise_outside_wait=0, ignored_last_ms=0, emu_pending=no, emu_hold=no, emu_remaining_ms=0, emu_delay_ms=0, emu_hold_ms=0, start_pin=22, done_pin=34
+  2026-04-01 19:07:50.250 OTCYCLE: active=no, phase=idle, ready=yes, step=0/0/3, main=0/0, steps=920, tick_ms=2190, last=idle
+  2026-04-01 19:08:01.916 SEAL: run_state=idle, start_out=off, done=inactive, done_raw=inactive, done_filtered=inactive, done_pin_level=HIGH, done_active_level=LOW, done_filter_ms=500, pulse_ms=300, wait_done=no, wait_age_ms=0, wait_hb_seq=0, completion_blocked=no, block_reason=not_waiting_done, completion_seq=2, last_completion=physical, last_completion_ms=451755, edges_raw=3/3, edges_effective=2/2, raw_last_rise_ms=451255, raw_last_fall_ms=452847, eff_last_rise_ms=451755, eff_last_fall_ms=456322, ignored_rise_outside_wait=0, ignored_last_ms=0, emu_pending=no, emu_hold=no, emu_remaining_ms=0, emu_delay_ms=0, emu_hold_ms=0, start_pin=22, done_pin=34
+  2026-04-01 19:08:02.221 OTCYCLE: active=no, phase=idle, ready=yes, step=0/0/3, main=0/0, steps=920, tick_ms=2190, last=idle
+  2026-04-01 19:08:13.936 SEAL: run_state=idle, start_out=off, done=inactive, done_raw=inactive, done_filtered=inactive, done_pin_level=HIGH, done_active_level=LOW, done_filter_ms=500, pulse_ms=300, wait_done=no, wait_age_ms=0, wait_hb_seq=0, completion_blocked=no, block_reason=not_waiting_done, completion_seq=2, last_completion=physical, last_completion_ms=451755, edges_raw=3/3, edges_effective=2/2, raw_last_rise_ms=451255, raw_last_fall_ms=452847, eff_last_rise_ms=451755, eff_last_fall_ms=456322, ignored_rise_outside_wait=0, ignored_last_ms=0, emu_pending=no, emu_hold=no, emu_remaining_ms=0, emu_delay_ms=0, emu_hold_ms=0, start_pin=22, done_pin=34
+  2026-04-01 19:08:14.241 OTCYCLE: active=no, phase=idle, ready=yes, step=0/0/3, main=0/0, steps=920, tick_ms=2190, last=idle
+  2026-04-01 19:08:16.042 SEAL: run_state=idle, start_out=off, done=inactive, done_raw=inactive, done_filtered=inactive, done_pin_level=HIGH, done_active_level=LOW, done_filter_ms=500, pulse_ms=300, wait_done=no, wait_age_ms=0, wait_hb_seq=0, completion_blocked=no, block_reason=not_waiting_done, completion_seq=2, last_completion=physical, last_completion_ms=451755, edges_raw=3/3, edges_effective=2/2, raw_last_rise_ms=451255, raw_last_fall_ms=452847, eff_last_rise_ms=451755, eff_last_fall_ms=456322, ignored_rise_outside_wait=0, ignored_last_ms=0, emu_pending=no, emu_hold=no, emu_remaining_ms=0, emu_delay_ms=0, emu_hold_ms=0, start_pin=22, done_pin=34
+  2026-04-01 19:08:16.337 OTCYCLE: active=no, phase=idle, ready=yes, step=0/0/3, main=0/0, steps=920, tick_ms=2190, last=idle
+COM11:
+  2026-04-01 19:08:16.765 Шаг рабочего цикла: 0
+  2026-04-01 19:08:16.771 Время сохранения: 460 сек
+  2026-04-01 19:08:16.774 Состояние системы: 0x0
+  2026-04-01 19:08:16.776 Калибровка: да
+  2026-04-01 19:08:16.780 Расстояние: 29199 шагов
+  2026-04-01 19:08:16.781 ✗ Нет сохраненного состояния
+  2026-04-01 19:08:16.788 ====================================
+  2026-04-01 19:08:16.788 
+  2026-04-01 19:08:16.788 === РЕКОМЕНДАЦИИ ===
+  2026-04-01 19:08:16.788 
+
+[DISCONNECT EVENTS]
+none

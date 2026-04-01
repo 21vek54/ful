@@ -1,7 +1,7 @@
 @echo off
 setlocal
 chcp 65001 >nul
-cd /d "%~dp0conveyor_control_com10"
+cd /d "%~dp0..\..\firmware\conveyor_control_com10"
 echo [FLASH] conveyor_control_com10 (COM10)
 pio run -t upload
 set ERR=%ERRORLEVEL%

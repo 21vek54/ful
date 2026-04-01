@@ -1,0 +1,112 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6">
+  <diagram id="nodes-states" name="Узлы и состояния">
+    <mxGraphModel dx="521" dy="616" grid="0" gridSize="10" guides="0" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=22;fontStyle=1;" value="Основной цикл линии: узлы, состояния и параллельная работа" vertex="1">
+          <mxGeometry height="30" width="700" x="30" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#6a00ff;strokeColor=#3700CC;fontSize=13;fontColor=#ffffff;" value="Синий блок: когда узел стартует&#xa;Зеленый блок: какие состояния меняет&#xa;Оранжевый блок: как узел действует при PAUSE&#xa;Желтая выноска: общее правило или уточнение" vertex="1">
+          <mxGeometry height="105" width="330" x="30" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f4e79;strokeColor=#1f4e79;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="INFEED" vertex="1">
+          <mxGeometry height="40" width="220" x="30" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Стартует:&lt;br&gt;BUFFER_COUNT = 0 или 1&lt;br&gt;и SHIFT = HOME_Z" vertex="1">
+          <mxGeometry height="100" width="220" x="30" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет:&#xa;BUFFER_COUNT&#xa;0 -&gt; 1 -&gt; 2" vertex="1">
+          <mxGeometry height="110" width="220" x="32" y="473" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;если последний блок на подводе еще собирается,&lt;br&gt;работает по обычным условиям" vertex="1">
+          <mxGeometry height="110" width="220" x="25" y="627" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f4e79;strokeColor=#1f4e79;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="SHIFT" vertex="1">
+          <mxGeometry height="40" width="220" x="280" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Стартует:&lt;br&gt;SHIFT = HOME_Z&lt;br&gt;BUFFER_COUNT = 2&lt;br&gt;IN2.LINE1 = 0&lt;br&gt;и логический флаг step3_ready = 1" vertex="1">
+          <mxGeometry height="110" width="220" x="280" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет:&#xa;SHIFT: HOME_Z -&gt; BUSY -&gt; SHIFTED_C -&gt; BUSY -&gt; HOME_Z&#xa;BUFFER_COUNT 2 -&gt; 0&#xa;IN2.LINE1 = 1" vertex="1">
+          <mxGeometry height="130" width="220" x="285" y="463" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;передает пары в IN2,&lt;br&gt;пока собираем последний блок" vertex="1">
+          <mxGeometry height="100" width="220" x="282" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f4e79;strokeColor=#1f4e79;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="IN2" vertex="1">
+          <mxGeometry height="40" width="220" x="530" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Делает такт если:&lt;br&gt;IN2.LINE1 = 1&lt;br&gt;и IN2.LINE3 = 0" vertex="1">
+          <mxGeometry height="90" width="220" x="530" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="32" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет:&lt;br&gt;IN2.LINE1 = 0&lt;br&gt;IN2.LINE2 = 1, если до такта IN2.LINE1 = 1&lt;br&gt;IN2.LINE3 = 1, если до такта IN2.LINE2 = 1" vertex="1">
+          <mxGeometry height="100" width="220" x="544" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;принимает пары,&lt;br&gt;пока собираем последний блок" vertex="1">
+          <mxGeometry height="90" width="220" x="539" y="629" as="geometry" />
+        </mxCell>
+        <mxCell id="40" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6a1b9a;strokeColor=#6a1b9a;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="MANIPULATOR" vertex="1">
+          <mxGeometry height="40" width="250" x="780" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="41" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Стартует если:&lt;br&gt;на IN2: LINE1 = 1, LINE2 = 1, LINE3 = 1&lt;br&gt;MANIP не занят&lt;br&gt;стартовое положение: право / верх / разжат&lt;br&gt;SEALER = EMPTY или DONE&lt;br&gt;если SEALER = DONE, то OUT2 все линии должны быть свободны" vertex="1">
+          <mxGeometry height="163" width="250" x="780" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="43" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;если последний блок на подводящей стороне еще собирается,&lt;br&gt;работает по обычным условиям;&lt;br&gt;если подводящая сторона пуста, но SEALER готов и OUT2 свободен - только выгрузка" vertex="1">
+          <mxGeometry height="125" width="250" x="782" y="613" as="geometry" />
+        </mxCell>
+        <mxCell id="50" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b71c1c;strokeColor=#b71c1c;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="SEALER" vertex="1">
+          <mxGeometry height="40" width="220" x="1060" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="51" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Стартует:&lt;br&gt;если SEALER = LOADED&lt;br&gt;и step7_ready = 1" vertex="1">
+          <mxGeometry height="90" width="220" x="1060" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="52" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет:&lt;div&gt;LOADED -&amp;gt; RUNNING -&amp;gt; DONE&lt;/div&gt;" vertex="1">
+          <mxGeometry height="90" width="220" x="1069" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="53" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;если загружен последний блок,&lt;br&gt;делает последнюю запайку;&lt;br&gt;потом больше не стартует" vertex="1">
+          <mxGeometry height="100" width="220" x="1073" y="623" as="geometry" />
+        </mxCell>
+        <mxCell id="60" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2e7d32;strokeColor=#2e7d32;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="OUT2" vertex="1">
+          <mxGeometry height="40" width="220" x="1310" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="61" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Стартует:&lt;br&gt;если хотя бы одна из линий OUT2 = 1&lt;br&gt;и MAIN_OUT = EMPTY" vertex="1">
+          <mxGeometry height="90" width="220" x="1310" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="62" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет:&lt;br&gt;MAIN_OUT = OCCUPIED&lt;br&gt;OUT2.LINE1 = 0&lt;br&gt;OUT2.LINE2 = 0, если до такта OUT2.LINE1 = 0&lt;br&gt;OUT2.LINE3 = 0, если до такта OUT2.LINE2 = 0" vertex="1">
+          <mxGeometry height="125" width="239" x="1315" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="63" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;принимает последний готовый блок;&lt;br&gt;дальше только освобождается" vertex="1">
+          <mxGeometry height="90" width="220" x="1324" y="632" as="geometry" />
+        </mxCell>
+        <mxCell id="70" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00695c;strokeColor=#00695c;fontColor=#ffffff;fontStyle=1;fontSize=16;" value="MAIN_OUT" vertex="1">
+          <mxGeometry height="40" width="220" x="1560" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="71" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=13;fontColor=#ffffff;" value="Стартует если:&lt;br&gt;&lt;span style=&quot;font-family: Consolas, &amp;quot;Courier New&amp;quot;, monospace; font-size: 15px; white-space: pre; color: rgb(206, 145, 120); font-weight: bold;&quot;&gt;MAIN_OUT = &lt;/span&gt;&lt;span style=&quot;font-family: Consolas, &amp;quot;Courier New&amp;quot;, monospace; font-size: 15px; white-space: pre; color: rgb(206, 145, 120);&quot;&gt;OCCUPIED&lt;/span&gt;" vertex="1">
+          <mxGeometry height="90" width="220" x="1560" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="72" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет:&#xa;MAIN_OUT = OCCUPIED -&gt; MOVING -&gt; EMPTY" vertex="1">
+          <mxGeometry height="90" width="220" x="1575" y="464" as="geometry" />
+        </mxCell>
+        <mxCell id="73" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa6800;strokeColor=#C73500;fontSize=13;fillStyle=auto;fontColor=#000000;" value="При PAUSE:&lt;br&gt;доводит уже поданные пары;&lt;br&gt;новых подач нет" vertex="1">
+          <mxGeometry height="90" width="220" x="1582" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="82" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#e3c800;strokeColor=#B09500;fontSize=13;fontColor=#000000;" value="Команда PAUSE:&#xa;1) дособираем последний полный блок на IN2;&#xa;2) если тарелок не хватает, подвод продолжает крутиться, оператору показываем: добавьте еще N тарелок;&#xa;3) после полного блока даем один цикл MANIP, ждем завершения запайки, потом еще один цикл на выгрузку;&#xa;4) если последний блок на подводящей стороне уже не собираем, но в SEALER есть готовый блок и OUT2 свободен, разрешен только выгрузочный цикл;&#xa;5) после этого запайщик заново не запускаем" vertex="1">
+          <mxGeometry height="190" width="470" x="540" y="876" as="geometry" />
+        </mxCell>
+        <mxCell id="83" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#e3c800;strokeColor=#B09500;fontSize=13;fontColor=#000000;" value="step7 ready:&#xa;после шага 7 блок уже уложен,&#xa;вертикаль поднята слева;&#xa;шаг 8 только возвращает каретку вправо" vertex="1">
+          <mxGeometry height="100" width="280" x="1168" y="931" as="geometry" />
+        </mxCell>
+        <mxCell id="yjJuNTPIRqZcTK4sdqxK-102" edge="1" parent="1" source="32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="42" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="764" y="520" as="sourcePoint" />
+            <mxPoint x="905" y="393" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="42" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#008a00;strokeColor=#005700;fontSize=13;fontColor=#ffffff;" value="Меняет за один общий ход:&lt;br&gt;1. IN2.LINE1 = 0, IN2.LINE2 = 0, IN2.LINE3 = 0&lt;br&gt;2. SEALER -&gt; LOADED, если до такта на IN2 был полный блок&lt;br&gt;3. OUT2.LINE1 = 1, LINE2 = 1, LINE3 = 1, если до такта SEALER = DONE" vertex="1">
+          <mxGeometry height="120" width="250" x="780" y="450" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
