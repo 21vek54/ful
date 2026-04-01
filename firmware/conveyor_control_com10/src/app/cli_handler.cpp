@@ -1,7 +1,8 @@
 #include "app/cli_handler.h"
 #include "app/board_monitor.h"
-#include "core/settings.h"
+#include "app/conveyor_status_runtime.h"
 #include "app/manual_runtime.h"
+#include "core/settings.h"
 
 #include <math.h>
 
@@ -159,6 +160,136 @@ bool parseOtcycleStartArgs(const String &args, const char *example, uint32_t &cy
     return true;
 }
 
+const char *sealerRunStateToText(groups::sealer::SealerRunState state)
+{
+    switch (state) {
+        case groups::sealer::SealerRunState::Idle:
+            return "idle";
+        case groups::sealer::SealerRunState::StartPulseActive:
+            return "start_pulse";
+        case groups::sealer::SealerRunState::WaitDone:
+            return "wait_done";
+    }
+    return "unknown";
+}
+
+const char *sealerLastCompletionToText(const groups::sealer::SealerStatus &status)
+{
+    if (status.completionSeq == 0U) {
+        return "none";
+    }
+    return status.lastCompletionSynthetic ? "synthetic" : "physical";
+}
+
+const char *sealerWaitDoneBlockReasonToText(groups::sealer::SealerWaitDoneBlockReason reason)
+{
+    switch (reason) {
+        case groups::sealer::SealerWaitDoneBlockReason::None:
+            return "none";
+        case groups::sealer::SealerWaitDoneBlockReason::NotWaitingDone:
+            return "not_waiting_done";
+        case groups::sealer::SealerWaitDoneBlockReason::WaitingDoneSignalInactive:
+            return "waiting_done_inactive";
+        case groups::sealer::SealerWaitDoneBlockReason::WaitingDoneSyntheticPending:
+            return "waiting_done_synth_pending";
+        case groups::sealer::SealerWaitDoneBlockReason::WaitingDoneSignalAlreadyActiveNoEdge:
+            return "waiting_done_active_no_new_edge";
+    }
+    return "unknown";
+}
+
+const char *logicLevelToText(bool levelHigh)
+{
+    return levelHigh ? "HIGH" : "LOW";
+}
+
+void printSealEmuOnceUsage()
+{
+    Serial.print("Usage: SEAL EMU ONCE [0..");
+    Serial.print(groups::sealer::getDoneEmuDelayMaxMs());
+    Serial.print("] [");
+    Serial.print(groups::sealer::getDoneEmuHoldMinMs());
+    Serial.print("..");
+    Serial.print(groups::sealer::getDoneEmuHoldMaxMs());
+    Serial.println("]");
+}
+
+bool parseSealEmuOnceArgs(const String &args, uint32_t &delayMs, uint32_t &holdMs)
+{
+    String delayTok;
+    String holdTail;
+    splitCommandLine(args, delayTok, holdTail);
+
+    if (!delayTok.isEmpty() && !parseUnsigned(delayTok, delayMs)) {
+        return false;
+    }
+    if (holdTail.isEmpty()) {
+        return true;
+    }
+
+    String holdTok;
+    String extra;
+    splitCommandLine(holdTail, holdTok, extra);
+    if (holdTok.isEmpty() || !parseUnsigned(holdTok, holdMs)) {
+        return false;
+    }
+    extra.trim();
+    return extra.isEmpty();
+}
+
+void printSealEmuStatus()
+{
+    const groups::sealer::SealerStatus status = groups::sealer::readSealerStatus();
+    Serial.print("SEAL EMU: run_state=");
+    Serial.print(sealerRunStateToText(status.runState));
+    Serial.print(", pending=");
+    Serial.print(status.doneSyntheticPending ? "yes" : "no");
+    Serial.print(", hold=");
+    Serial.print(status.doneSyntheticHoldActive ? "yes" : "no");
+    Serial.print(", remaining_ms=");
+    Serial.print(status.doneSyntheticRemainingMs);
+    Serial.print(", delay_ms=");
+    Serial.print(status.doneSyntheticDelayMs);
+    Serial.print(", hold_ms=");
+    Serial.print(status.doneSyntheticHoldMs);
+    Serial.print(", done_raw=");
+    Serial.print(status.doneRawInputActive ? "active" : "inactive");
+    Serial.print(", done_filtered=");
+    Serial.print(status.doneFilteredInputActive ? "active" : "inactive");
+    Serial.print(", done_effective=");
+    Serial.print(status.doneInputActive ? "active" : "inactive");
+    Serial.print(", done_pin_level=");
+    Serial.print(logicLevelToText(status.donePinLevelHigh));
+    Serial.print(", done_active_level=");
+    Serial.print(status.doneActiveLevelLow ? "LOW" : "HIGH");
+    Serial.print(", wait_done=");
+    Serial.print(status.waitDoneActive ? "yes" : "no");
+    Serial.print(", wait_age_ms=");
+    Serial.print(status.waitDoneAgeMs);
+    Serial.print(", wait_hb_seq=");
+    Serial.print(status.waitDoneHeartbeatSeq);
+    Serial.print(", block_reason=");
+    Serial.print(sealerWaitDoneBlockReasonToText(status.waitDoneBlockReason));
+    Serial.print(", completion_blocked=");
+    Serial.print(status.completionBlocked ? "yes" : "no");
+    Serial.print(", completion_seq=");
+    Serial.print(status.completionSeq);
+    Serial.print(", last_completion=");
+    Serial.print(sealerLastCompletionToText(status));
+    Serial.print(", edges_raw=");
+    Serial.print(status.doneRawRiseCount);
+    Serial.print("/");
+    Serial.print(status.doneRawFallCount);
+    Serial.print(", edges_effective=");
+    Serial.print(status.doneEffectiveRiseCount);
+    Serial.print("/");
+    Serial.print(status.doneEffectiveFallCount);
+    Serial.print(", ignored_outside_wait=");
+    Serial.print(status.ignoredRiseOutsideWaitDoneCount);
+    Serial.print(", ignored_last_ms=");
+    Serial.println(status.ignoredRiseOutsideWaitDoneLastMs);
+}
+
 bool tryHandleDistanceMoveCommand(const String &cmd, const String &args)
 {
     uint32_t steps = 0;
@@ -224,6 +355,18 @@ bool tryHandleShiftCommand(const String &cmd)
 
 bool tryHandleServiceCommand(const String &cmd, const String &args)
 {
+    if (cmd == "FSC") {
+        app::conveyorFeedSideNoteIn2Consumed();
+        Serial.println("FEED STRICT: sync IN2 consumed accepted.");
+        return true;
+    }
+
+    if (cmd == "FSINV") {
+        app::invalidateConveyorFeedSideModel("manual FSINV command");
+        Serial.println("FEED STRICT: model invalidated.");
+        return true;
+    }
+
     if (cmd == "P1OT" || cmd == "1OT") {
         uint32_t cyclesRaw = core::g_settings.otvodCycleDefaultTotal;
         uint32_t stepsRaw = core::g_settings.step2DivertSteps;
@@ -312,17 +455,87 @@ bool tryHandleServiceCommand(const String &cmd, const String &args)
         String subArgs;
         splitCommandLine(args, subCmd, subArgs);
 
+        if (app::manual::isOtvodCycleActive() &&
+            !(subCmd.isEmpty() ||
+              subCmd == "H" || subCmd == "HELP" ||
+              subCmd == "STATUS" || subCmd == "STATE" ||
+              subCmd == "EMU")) {
+            Serial.println("OTCYCLE: active, only SEAL STATUS and SEAL EMU are allowed.");
+            return true;
+        }
+
         if (subCmd.isEmpty() || subCmd == "HELP" || subCmd == "H") {
             Serial.println("SEAL commands:");
             Serial.println("  SEAL START [ms]");
             Serial.println("  SEAL STATUS");
             Serial.println("  SEAL OUT ON");
             Serial.println("  SEAL OUT OFF");
+            Serial.println("  SEAL EMU ONCE [delay_ms] [hold_ms]");
+            Serial.println("  SEAL EMU STATUS");
+            Serial.println("  SEAL EMU CANCEL");
             return true;
         }
 
         if (subCmd == "STATUS" || subCmd == "STATE") {
             app::manual::printSealStatus();
+            return true;
+        }
+
+        if (subCmd == "EMU") {
+            String emuCmd;
+            String emuArgs;
+            splitCommandLine(subArgs, emuCmd, emuArgs);
+
+            if (emuCmd.isEmpty() || emuCmd == "HELP" || emuCmd == "H") {
+                Serial.println("SEAL EMU commands:");
+                Serial.println("  SEAL EMU ONCE [delay_ms] [hold_ms]");
+                Serial.println("  SEAL EMU STATUS");
+                Serial.println("  SEAL EMU CANCEL");
+                Serial.print("Defaults: delay_ms=");
+                Serial.print(groups::sealer::getDoneEmuDelayDefaultMs());
+                Serial.print(", hold_ms=");
+                Serial.println(groups::sealer::getDoneEmuHoldDefaultMs());
+                printSealEmuOnceUsage();
+                return true;
+            }
+
+            if (emuCmd == "STATUS" || emuCmd == "STATE") {
+                printSealEmuStatus();
+                return true;
+            }
+
+            if (emuCmd == "CANCEL" || emuCmd == "STOP") {
+                if (!groups::sealer::cancelDoneEmulation()) {
+                    Serial.println("SEAL EMU: nothing to cancel.");
+                }
+                return true;
+            }
+
+            if (emuCmd == "ONCE" || emuCmd == "RUN") {
+                uint32_t delayMs = groups::sealer::getDoneEmuDelayDefaultMs();
+                uint32_t holdMs = groups::sealer::getDoneEmuHoldDefaultMs();
+                if (!parseSealEmuOnceArgs(emuArgs, delayMs, holdMs)) {
+                    printSealEmuOnceUsage();
+                    return true;
+                }
+
+                const groups::sealer::SealerStatus status = groups::sealer::readSealerStatus();
+                if (status.runState != groups::sealer::SealerRunState::WaitDone) {
+                    Serial.println("SEAL EMU ONCE rejected: SEAL is not waiting DONE (WaitDone).");
+                    return true;
+                }
+                if (status.doneSyntheticPending || status.doneSyntheticHoldActive) {
+                    Serial.println("SEAL EMU ONCE ignored: previous ONCE is still active.");
+                    return true;
+                }
+
+                if (!groups::sealer::scheduleDoneEmulationOnce(delayMs, holdMs)) {
+                    printSealEmuOnceUsage();
+                }
+                return true;
+            }
+
+            Serial.println("Unknown SEAL EMU subcommand. Use: SEAL EMU HELP");
             return true;
         }
 
@@ -690,6 +903,9 @@ void printHelp()
     Serial.println("    SEAL STATUS     - показать состояние START/DONE");
     Serial.println("    SEAL OUT ON     - вручную включить старт запайщика");
     Serial.println("    SEAL OUT OFF    - вручную выключить старт запайщика");
+    Serial.println("    SEAL EMU ONCE [delay_ms] [hold_ms] - service single-shot DONE emulation (WaitDone only)");
+    Serial.println("    SEAL EMU STATUS - show DONE emulation state");
+    Serial.println("    SEAL EMU CANCEL - cancel pending/active DONE emulation");
     Serial.println("  Флаг и датчики:");
     Serial.println("    W          - флаг вверх");
     Serial.println("    S          - флаг вниз");
@@ -698,6 +914,8 @@ void printHelp()
     Serial.println("    H          - помощь");
     Serial.println("    MONITOR    - вкл/выкл поток loop/heap/reset, 1 строка в 1 сек");
     Serial.println("    MONITOR STATUS - вывести 1 строку loop/heap/reset без запуска потока");
+    Serial.println("    FSC        - strict-feed sync: IN2 consumed by manipulator");
+    Serial.println("    FSINV      - strict-feed invalidate model (service)");
     Serial.println("    I2C status - addr 12, SDA=GPIO16, SCL=GPIO17");
     Serial.println("Команды не чувствительны к регистру.");
 }
@@ -717,6 +935,8 @@ void handleCommand(String line)
         const bool commandAllowedDuringOtvodCycle =
             (cmd == "OTCYCLE" || cmd == "H" || cmd == "E" ||
              cmd == "MON" || cmd == "MONITOR" ||
+             cmd == "FSC" || cmd == "FSINV" ||
+             cmd == "SEAL" ||
              cmd == "VFDTICK" || cmd == "R1OFF" || cmd == "VFDSTOP" ||
              cmd == "STOP2" || cmd == "STEP2STOP");
         if (!commandAllowedDuringOtvodCycle) {
@@ -750,3 +970,4 @@ void readSerialCommands()
         g_cmdBuffer += ch;
     }
 }
+

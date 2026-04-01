@@ -82,6 +82,7 @@ void serviceShiftBackground(bool allowPositionalOverlap)
 {
     shiftHookUpdateMainSensorFilter();
     shiftUpdateSensorFilters();
+    shiftHookProcessI2cBus();
     if (allowPositionalOverlap) {
         shiftHookProcessPositionalMotion();
     }

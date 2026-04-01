@@ -31,6 +31,7 @@ static constexpr int PIN_I2C_SCL = PIN_RS485_TX;
 static constexpr uint8_t I2C_MANAGED_POKE_CMD = 0xA5;
 static constexpr uint8_t I2C_MANAGED_TEXT_CMD = 0xA6;
 static constexpr size_t I2C_MANAGED_TEXT_MAX_LEN = 64;
+static constexpr uint8_t I2C_MANAGED_QUEUE_SIZE = 4;
 static constexpr uint16_t I2C_FRAME_MAGIC = 0x4659;
 static constexpr uint16_t I2C_FRAME_PROTO_VER = 1;
 static constexpr size_t I2C_FRAME_SIZE = 28;
@@ -41,6 +42,7 @@ static constexpr uint16_t STATUS_SAFE_BIT = 1U << 2;
 static constexpr uint16_t STATUS_ALARM_BIT = 1U << 3;
 static constexpr uint16_t STATUS_CALIBRATED_BIT = 1U << 4;
 static constexpr uint16_t STATUS_STEP7_READY_BIT = 1U << 5;
+static constexpr uint16_t STATUS_STEP3_READY_BIT = 1U << 6;
 static constexpr uint16_t ERROR_DRIVER_ALARM_BIT = 1U << 0;
 static constexpr uint16_t ERROR_LIMITS_CONFLICT_BIT = 1U << 1;
 static constexpr uint16_t ERROR_Z_CONFLICT_BIT = 1U << 2;
@@ -75,9 +77,16 @@ static_assert(sizeof(I2cStatusFrame) == I2C_FRAME_SIZE, "Unexpected I2cStatusFra
 static uint32_t g_i2cRxCount = 0;
 static uint32_t g_i2cTxCount = 0;
 static uint8_t g_i2cLastRxLen = 0;
-static volatile bool g_i2cCommandPending = false;
-static volatile uint8_t g_i2cPendingCommandLen = 0;
-static char g_i2cPendingCommand[I2C_MANAGED_TEXT_MAX_LEN + 1] = {};
+struct I2cManagedCommandSlot {
+    char text[I2C_MANAGED_TEXT_MAX_LEN + 1] = {};
+    uint8_t len = 0;
+};
+static I2cManagedCommandSlot g_i2cCommandQueue[I2C_MANAGED_QUEUE_SIZE] = {};
+static volatile uint8_t g_i2cCommandHead = 0;
+static volatile uint8_t g_i2cCommandTail = 0;
+static volatile uint8_t g_i2cCommandCount = 0;
+static volatile uint32_t g_i2cDroppedCommandCount = 0;
+static uint32_t g_i2cDroppedCommandCountLogged = 0;
 
 // =====================================================
 // ДОБАВЛЕНО: логика авто-восстановления (как команда V)
@@ -207,6 +216,9 @@ static uint16_t getManipulatorStatusWord() {
     if (isCalibrated) {
         word |= STATUS_CALIBRATED_BIT;
     }
+    if (isWorkCycleStep3Reached()) {
+        word |= STATUS_STEP3_READY_BIT;
+    }
     if (isWorkCycleStep7Reached()) {
         word |= STATUS_STEP7_READY_BIT;
     }
@@ -272,6 +284,48 @@ static void fillI2cStatusFrame(I2cStatusFrame& frame) {
     frame.checksum = checksumI2cStatusFrame(frame);
 }
 
+static void queueManagedI2cCommand(const char* text, uint8_t len) {
+    if (text == nullptr || len == 0) {
+        return;
+    }
+
+    if (g_i2cCommandCount >= I2C_MANAGED_QUEUE_SIZE) {
+        g_i2cDroppedCommandCount = static_cast<uint32_t>(g_i2cDroppedCommandCount + 1U);
+        return;
+    }
+
+    I2cManagedCommandSlot& slot = g_i2cCommandQueue[g_i2cCommandTail];
+    memcpy(slot.text, text, len);
+    slot.text[len] = '\0';
+    slot.len = len;
+
+    g_i2cCommandTail =
+        static_cast<uint8_t>((static_cast<uint8_t>(g_i2cCommandTail + 1U)) % I2C_MANAGED_QUEUE_SIZE);
+    g_i2cCommandCount = static_cast<uint8_t>(g_i2cCommandCount + 1U);
+}
+
+static bool popManagedI2cCommand(char* out, uint8_t& lenOut) {
+    lenOut = 0;
+    if (out == nullptr || g_i2cCommandCount == 0) {
+        return false;
+    }
+
+    I2cManagedCommandSlot& slot = g_i2cCommandQueue[g_i2cCommandHead];
+    lenOut = slot.len;
+    if (lenOut == 0) {
+        slot.text[0] = '\0';
+    } else {
+        memcpy(out, slot.text, static_cast<size_t>(lenOut) + 1U);
+    }
+
+    slot.text[0] = '\0';
+    slot.len = 0;
+    g_i2cCommandHead =
+        static_cast<uint8_t>((static_cast<uint8_t>(g_i2cCommandHead + 1U)) % I2C_MANAGED_QUEUE_SIZE);
+    g_i2cCommandCount = static_cast<uint8_t>(g_i2cCommandCount - 1U);
+    return true;
+}
+
 static void onI2cReceive(int len) {
     g_i2cLastRxLen = static_cast<uint8_t>(len < 0 ? 0 : len);
     if (len <= 0) {
@@ -288,16 +342,16 @@ static void onI2cReceive(int len) {
     }
 
     if (opcode == I2C_MANAGED_TEXT_CMD) {
+        char local[I2C_MANAGED_TEXT_MAX_LEN + 1] = {};
         size_t count = 0;
         while (Wire.available() > 0 && count < I2C_MANAGED_TEXT_MAX_LEN) {
-            g_i2cPendingCommand[count++] = static_cast<char>(Wire.read());
+            local[count++] = static_cast<char>(Wire.read());
         }
         while (Wire.available() > 0) {
             (void)Wire.read();
         }
-        g_i2cPendingCommand[count] = '\0';
-        g_i2cPendingCommandLen = static_cast<uint8_t>(count);
-        g_i2cCommandPending = count > 0;
+        local[count] = '\0';
+        queueManagedI2cCommand(local, static_cast<uint8_t>(count));
         return;
     }
 
@@ -320,19 +374,27 @@ static void initI2cStatusBus() {
 }
 
 static void processPendingI2cCommand() {
-    if (!g_i2cCommandPending) {
-        return;
+    char local[I2C_MANAGED_TEXT_MAX_LEN + 1] = {};
+    uint8_t len = 0;
+    uint32_t droppedTotal = 0;
+
+    noInterrupts();
+    const bool hasCommand = popManagedI2cCommand(local, len);
+    droppedTotal = g_i2cDroppedCommandCount;
+    interrupts();
+
+    if (droppedTotal != g_i2cDroppedCommandCountLogged) {
+        const uint32_t droppedDelta = droppedTotal - g_i2cDroppedCommandCountLogged;
+        g_i2cDroppedCommandCountLogged = droppedTotal;
+        Serial.print("I2C CMD WARN: dropped ");
+        Serial.print(droppedDelta);
+        Serial.print(", total=");
+        Serial.println(droppedTotal);
     }
 
-    char local[I2C_MANAGED_TEXT_MAX_LEN + 1] = {};
-    noInterrupts();
-    const uint8_t len = g_i2cPendingCommandLen;
-    memcpy(local, g_i2cPendingCommand, len);
-    local[len] = '\0';
-    g_i2cPendingCommand[0] = '\0';
-    g_i2cPendingCommandLen = 0;
-    g_i2cCommandPending = false;
-    interrupts();
+    if (!hasCommand || len == 0) {
+        return;
+    }
 
     String line(local);
     line.trim();
@@ -565,6 +627,7 @@ void processCommand(String command) {
             saveSystemParameters();
             delay(50);
             emergencyStop();
+            resetWorkCycleReadyLatches();
             stopEnduranceTest();
             stopGreaseRemoval(); // ДОБАВЛЕНА ЭТА СТРОКА
             break;
@@ -589,11 +652,13 @@ void processCommand(String command) {
         case '0': // Сброс системы
             Serial.println("Сброс состояния системы...");
             resetSystemState();
+            resetWorkCycleReadyLatches();
             break;
 
         case 'C': // Очистка EEPROM
             Serial.println("Очистка EEPROM...");
             clearSystemState();
+            resetWorkCycleReadyLatches();
             break;
 
         case '?': // Помощь

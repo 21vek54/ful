@@ -11,6 +11,23 @@
 
 namespace {
 
+constexpr int8_t FEED_BUFFER_UNKNOWN = -1;
+constexpr int8_t FEED_BUFFER_EMPTY = 0;
+constexpr int8_t FEED_BUFFER_PAIR = 2;
+constexpr int8_t IN2_PAIRS_UNKNOWN = -1;
+constexpr int8_t IN2_PAIRS_EMPTY = 0;
+constexpr int8_t IN2_PAIRS_FULL = 3;
+
+struct FeedSideRuntimeModel {
+    bool synced = false;
+    int8_t bufferCount = FEED_BUFFER_UNKNOWN;
+    int8_t in2Pairs = IN2_PAIRS_UNKNOWN;
+    bool program1RunActive = false;
+    uint8_t lastProgramPass = 0;
+};
+
+FeedSideRuntimeModel g_feedSideModel = {};
+
 bool isConveyorFlagUp()
 {
     return digitalRead(PIN_FLAG) == HIGH;
@@ -19,6 +36,63 @@ bool isConveyorFlagUp()
 bool isConveyorSensorConflict()
 {
     return shiftIsSensorZTriggered() && shiftIsSensorCTriggered();
+}
+
+bool isShiftHomeZStrict()
+{
+    const bool zActive = shiftIsSensorZTriggered();
+    const bool cActive = shiftIsSensorCTriggered();
+    return zActive && !cActive;
+}
+
+void invalidateConveyorFeedSideModelInternal(const char *reason)
+{
+    g_feedSideModel.synced = false;
+    g_feedSideModel.bufferCount = FEED_BUFFER_UNKNOWN;
+    g_feedSideModel.in2Pairs = IN2_PAIRS_UNKNOWN;
+    g_feedSideModel.program1RunActive = false;
+    g_feedSideModel.lastProgramPass = 0;
+
+    if (reason != nullptr && reason[0] != '\0') {
+        Serial.print("FEED STRICT: model invalidated: ");
+        Serial.println(reason);
+    }
+}
+
+void refreshFeedSideFlags(app::ConveyorStatusInputs &inputs)
+{
+    g_feedSideModel.program1RunActive = inputs.program1Active || inputs.infeed.busy;
+
+    if (inputs.infeed.busy) {
+        // While C2 is collecting plates, exact BUFFER_COUNT is not deterministic.
+        g_feedSideModel.bufferCount = FEED_BUFFER_UNKNOWN;
+    }
+
+    const bool bufferPairReady = program1GetBufferReady();
+    if (bufferPairReady) {
+        g_feedSideModel.bufferCount = FEED_BUFFER_PAIR;
+    }
+
+    if (!bufferPairReady &&
+        !g_feedSideModel.program1RunActive &&
+        g_feedSideModel.bufferCount == FEED_BUFFER_PAIR) {
+        invalidateConveyorFeedSideModelInternal("buffer pair flag dropped outside strict model");
+    }
+
+    const bool modelHasSnapshot =
+        g_feedSideModel.synced &&
+        g_feedSideModel.in2Pairs != IN2_PAIRS_UNKNOWN &&
+        g_feedSideModel.bufferCount != FEED_BUFFER_UNKNOWN &&
+        !inputs.sensorConflict;
+
+    const bool strictEmpty =
+        modelHasSnapshot &&
+        g_feedSideModel.bufferCount == FEED_BUFFER_EMPTY &&
+        g_feedSideModel.in2Pairs == IN2_PAIRS_EMPTY &&
+        isShiftHomeZStrict();
+
+    inputs.feedSideEmptyValid = modelHasSnapshot;
+    inputs.feedSideEmptyStrict = strictEmpty;
 }
 
 } // namespace
@@ -32,15 +106,85 @@ ConveyorStatusInputs readConveyorStatusInputs()
     inputs.outfeed = groups::outfeed::readOutfeedStatus();
     inputs.sealer = groups::sealer::readSealerStatus();
     inputs.sensorConflict = isConveyorSensorConflict();
-    inputs.program1Active = program1GetStateCode() != 0;
+    inputs.program1StateCode = program1GetStateCode();
+    inputs.program1PassIndex = program1GetPassIndex();
+    inputs.program1Active = inputs.program1StateCode != 0U;
     inputs.batchReady = program1IsBatchReadyForManipulator();
     inputs.flagUp = isConveyorFlagUp();
+    refreshFeedSideFlags(inputs);
     return inputs;
 }
 
 ConveyorStatusSnapshot readConveyorStatusSnapshot()
 {
     return buildConveyorStatusSnapshot(readConveyorStatusInputs());
+}
+
+void conveyorFeedSideNoteProgram1Started(bool startedFromBuffer)
+{
+    if (g_feedSideModel.synced && g_feedSideModel.in2Pairs != IN2_PAIRS_EMPTY) {
+        invalidateConveyorFeedSideModelInternal("program1 start with IN2 != empty");
+    }
+
+    g_feedSideModel.program1RunActive = true;
+    g_feedSideModel.lastProgramPass = 0;
+    g_feedSideModel.bufferCount = startedFromBuffer ? FEED_BUFFER_EMPTY : FEED_BUFFER_UNKNOWN;
+}
+
+void conveyorFeedSideNoteProgram1PassShiftCompleted(uint8_t passIndex)
+{
+    if (!g_feedSideModel.program1RunActive) {
+        invalidateConveyorFeedSideModelInternal("pass complete without active program1");
+        return;
+    }
+
+    g_feedSideModel.lastProgramPass = passIndex;
+    g_feedSideModel.bufferCount = FEED_BUFFER_EMPTY;
+
+    if (!g_feedSideModel.synced || g_feedSideModel.in2Pairs == IN2_PAIRS_UNKNOWN) {
+        return;
+    }
+
+    if (g_feedSideModel.in2Pairs >= IN2_PAIRS_FULL) {
+        invalidateConveyorFeedSideModelInternal("IN2 overflow on pass complete");
+        return;
+    }
+
+    g_feedSideModel.in2Pairs++;
+}
+
+void conveyorFeedSideNoteBatchReadyLatched()
+{
+    g_feedSideModel.synced = true;
+    g_feedSideModel.in2Pairs = IN2_PAIRS_FULL;
+}
+
+void conveyorFeedSideNoteProgram1Finished()
+{
+    g_feedSideModel.program1RunActive = false;
+    g_feedSideModel.lastProgramPass = 0;
+    g_feedSideModel.bufferCount = FEED_BUFFER_PAIR;
+}
+
+void conveyorFeedSideNoteProgram1Aborted()
+{
+    invalidateConveyorFeedSideModelInternal("program1 aborted");
+}
+
+void conveyorFeedSideNoteIn2Consumed()
+{
+    if (g_feedSideModel.program1RunActive) {
+        invalidateConveyorFeedSideModelInternal("IN2 consumed while program1 active");
+        return;
+    }
+
+    g_feedSideModel.synced = true;
+    g_feedSideModel.in2Pairs = IN2_PAIRS_EMPTY;
+}
+
+void invalidateConveyorFeedSideModel(const char *reason)
+{
+    invalidateConveyorFeedSideModelInternal(reason);
 }
 
 } // namespace app

@@ -1,6 +1,8 @@
 ﻿#include <Arduino.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <Wire.h>
 #include <WiFi.h>
 #include <Preferences.h>
@@ -52,6 +54,16 @@ constexpr char MQTT_PREF_KEY_BASE_TOPIC[] = "topic";
 constexpr uint32_t MQTT_RECONNECT_INTERVAL_MS = 5000;
 constexpr uint32_t MQTT_STATUS_PUBLISH_INTERVAL_MS = 5000;
 constexpr uint32_t I2C_CLOCK_HZ = 100000;
+// COM12 I2C hardening: timeout mitigates silent Wire hangs but is not a proof
+// that the underlying root cause is eliminated; recovery remains protocol-level.
+// Watchdog resets are intentionally not used as a replacement for root-cause fixes.
+constexpr uint32_t I2C_TIMEOUT_MS = 40;
+constexpr uint32_t I2C_WARN_LATENCY_MS = 30;
+constexpr uint32_t I2C_RECOVER_COOLDOWN_MS = 500;
+constexpr uint32_t I2C_START_TRACE_THROTTLE_MS = 5000;
+constexpr uint32_t I2C_WIRE_TRACE_SAMPLE_EVERY = 32;
+constexpr uint32_t I2C_ACTIVE_GUARD_MS = 350;
+constexpr uint32_t LOOP_HEARTBEAT_INTERVAL_MS = 5000;
 constexpr int PIN_I2C_SDA = 21;
 constexpr int PIN_I2C_SCL = 22;
 constexpr uint8_t I2C_MANAGED_POKE_CMD = 0xA5;
@@ -89,7 +101,22 @@ constexpr uint16_t DEVICE_KIND_MANIPULATOR = 2;
 constexpr uint16_t CONVEYOR_STATUS_PROGRAM1_ACTIVE_BIT = 1U << 5;
 constexpr uint16_t CONVEYOR_STATUS_BATCH_READY_BIT = 1U << 6;
 constexpr uint16_t CONVEYOR_STATUS_STEP2_ACTIVE_BIT = 1U << 7;
+constexpr uint16_t CONVEYOR_EXTRA0_FLAG_MASK = 0x0003U;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_SEQ_LOW_SHIFT = 2U;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_SEQ_LOW_MASK = 0x003FU;
+constexpr uint16_t CONVEYOR_EXTRA0_MOTION_SHIFT = 8U;
+constexpr uint16_t CONVEYOR_EXTRA0_MOTION_MASK = 0x0003U;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_BUSY_BIT = 1U << 10;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_START_PULSE_BIT = 1U << 11;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_DONE_ACTIVE_BIT = 1U << 12;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_SEQ_HIGH_SHIFT = 13U;
+constexpr uint16_t CONVEYOR_EXTRA0_SEALER_SEQ_HIGH_MASK = 0x0003U;
+constexpr uint16_t CONVEYOR_EXTRA0_VFD_TIMED_RUN_ACTIVE_BIT = 1U << 15;
+constexpr uint16_t CONVEYOR_EXTRA2_FEED_SIDE_EMPTY_STRICT_BIT = 1U << 14;
+constexpr uint16_t CONVEYOR_EXTRA2_FEED_SIDE_EMPTY_VALID_BIT = 1U << 15;
+constexpr uint8_t CONVEYOR_EXTRA2_PROGRAM_PASS_MASK = 0x3FU;
 constexpr uint16_t MANIPULATOR_STATUS_STEP7_READY_BIT = 1U << 5;
+constexpr uint16_t MANIPULATOR_STATUS_STEP3_READY_BIT = 1U << 6;
 constexpr uint16_t MANIPULATOR_SENSOR_RIGHT_BIT = 1U << 1;
 constexpr uint16_t MANIPULATOR_SENSOR_ZUP_BIT = 1U << 2;
 constexpr uint16_t MANIPULATOR_SENSOR_GRIP_OPEN_BIT = 1U << 4;
@@ -139,11 +166,11 @@ constexpr uint32_t OTVOD_WORK_STEP_SETTLE_POLL_MS = 50;
 constexpr uint32_t OTVOD_WORK_VFD_POLL_MS = 100;
 constexpr uint32_t OTVOD_WORK_STEP_PHASE_TIMEOUT_MS = 5000;
 constexpr uint32_t OTVOD_WORK_VFD_START_TIMEOUT_MS = 2000;
+constexpr uint8_t OTVOD_WORK_VFD_START_RETRY_MAX = 1;
 constexpr uint32_t OTVOD_WORK_VFD_TIMEOUT_MARGIN_MS = 4000;
 constexpr uint32_t OTVOD_WORK_VFD_TIMEOUT_FALLBACK_MS = 15000;
 constexpr uint32_t COMMON_CYCLE_SEAL_SETTLE_MS = 1000;
-constexpr bool SEAL_START_ACTIVE_LEVEL = HIGH;
-constexpr bool SEAL_DONE_ACTIVE_LEVEL = LOW; // INPUT_PULLUP + relay contact to GND
+constexpr uint32_t COMMON_DIAG_WAIT_LOG_MS = 15000;
 constexpr uint32_t SEAL_START_PULSE_MS_DEFAULT = 300;
 constexpr uint32_t SEAL_START_PULSE_MS_MIN = 50;
 constexpr uint32_t SEAL_START_PULSE_MS_MAX = 5000;
@@ -186,6 +213,7 @@ struct OtvodWorkCycleState {
     uint8_t stepCompletionSeqBase = 0;
     uint8_t vfdRunsStarted = 0;
     uint8_t vfdRunsCompleted = 0;
+    uint8_t vfdStartRetryCount = 0;
     uint32_t stepCommandSteps = OTVOD_WORK_STEP_STEPS;
     uint32_t stepStartedMs = 0;
     uint32_t stepCompletedMs = 0;
@@ -207,10 +235,21 @@ enum class CommonCycleStage : uint8_t {
     WaitNextBatch = 4
 };
 
+enum class CommonPauseState : uint8_t {
+    None = 0,
+    Requested = 1,
+    FillLastBlock = 2,
+    StableWait = 3
+};
+
 struct CommonCycleState {
     bool active = false;
     bool pauseRequested = false;
+    bool step3LaunchDone = false;
     bool parallelLaunchDone = false;
+    bool currentCycleLoadsSealer = false;
+    bool sealerDonePendingUnload = false;
+    CommonPauseState pauseState = CommonPauseState::None;
     CommonCycleStage stage = CommonCycleStage::Idle;
     uint16_t lastConsumedBatchSeq = 0;
     uint32_t manipStarts = 0;
@@ -218,6 +257,54 @@ struct CommonCycleState {
     uint32_t sealStartedMs = 0;
     String manipStartReason;
     String lastEvent = "idle";
+};
+
+struct I2cDiagState {
+    bool active = false;
+    uint32_t opSeq = 0;
+    uint32_t activeSeq = 0;
+    uint32_t activeStartedMs = 0;
+    uint8_t activeId = 0;
+    char activeOp[16] = "idle";
+    char activeOrigin[24] = "-";
+    char activeDetail[40] = "-";
+    uint32_t lastCompletedMs = 0;
+    uint32_t lastDurationMs = 0;
+    uint32_t maxDurationMs = 0;
+    uint32_t slowCount = 0;
+    uint32_t failCount = 0;
+    uint8_t lastId = 0;
+    char lastOp[16] = "none";
+    char lastOrigin[24] = "-";
+    char lastDetail[40] = "-";
+    char lastOutcome[24] = "none";
+    uint32_t lastStartTraceMs = 0;
+    uint32_t guardTripCount = 0;
+    uint32_t lastGuardSeq = 0;
+    uint32_t lastGuardMs = 0;
+};
+
+struct LoopDiagState {
+    uint32_t tickSeq = 0;
+    uint32_t lastTickStartedMs = 0;
+    uint32_t lastTickCompletedMs = 0;
+    uint32_t maxTickDurationMs = 0;
+    const char *currentStage = "boot";
+    uint32_t currentStageSinceMs = 0;
+};
+
+struct ScanDiagState {
+    bool active = false;
+    uint8_t activeId = 0;
+    char activeOrigin[24] = "-";
+    uint32_t activeStartedMs = 0;
+    uint8_t lastId = 0;
+    char lastOrigin[24] = "-";
+    char lastResult[24] = "none";
+    uint8_t lastException = 0;
+    uint32_t lastStartedMs = 0;
+    uint32_t lastFinishedMs = 0;
+    uint32_t lastDurationMs = 0;
 };
 
 String g_rs485RxBuffer;
@@ -263,17 +350,29 @@ Rs485DeviceState g_rs485Devices[RS485_SCAN_TABLE_MAX_ID + 1] = {};
 bool g_sealStartPulseActive = false;
 bool g_sealStartOutputActive = false;
 bool g_sealDoneLastActive = false;
+bool g_sealRemoteObserved = false;
 uint32_t g_sealDoneLastRiseMs = 0;
-uint32_t g_sealStartPulseStartedMs = 0;
 uint32_t g_sealStartPulseDurationMs = SEAL_START_PULSE_MS_DEFAULT;
+uint8_t g_sealCompletionSeqLast = 0;
 OtvodWorkCycleState g_otvodWorkCycle;
 CommonCycleState g_commonCycle;
+CommonCycleStage g_commonDiagLastStage = CommonCycleStage::Idle;
+uint32_t g_commonDiagStageSinceMs = 0;
+uint32_t g_commonDiagLastWaitLogMs = 0;
+I2cDiagState g_i2cDiag;
+LoopDiagState g_loopDiag;
+ScanDiagState g_scanDiag;
+uint32_t g_i2cLastRecoverMs = 0;
+uint32_t g_loopHeartbeatLastMs = 0;
 
 bool mqttPublishStatus(bool retained);
-bool i2cSendManagedDeviceCommand(uint8_t id, const String &command);
+bool i2cSendManagedDeviceCommand(uint8_t id, const String &command, const char *origin = "unspecified");
+void i2cDiagFinish(bool ok, const char *outcome);
+void i2cRecoverBus(const char *reason);
 bool startOtvodWorkCycle(uint8_t totalCycles = OTVOD_WORK_TOTAL_CYCLES,
                          uint32_t stepSteps = OTVOD_WORK_STEP_STEPS,
                          float legacyVfdDistanceCm = 0.0F);
+bool startCommonConveyorProgram1(const String &reason);
 
 const char *commonCycleStageName(CommonCycleStage stage)
 {
@@ -290,6 +389,318 @@ const char *commonCycleStageName(CommonCycleStage stage)
         default:
             return "idle";
     }
+}
+
+const char *commonPauseStateName(CommonPauseState state)
+{
+    switch (state) {
+        case CommonPauseState::Requested:
+            return "pause_requested";
+        case CommonPauseState::FillLastBlock:
+            return "pause_fill_last_block";
+        case CommonPauseState::StableWait:
+            return "pause_stable_wait";
+        case CommonPauseState::None:
+        default:
+            return "none";
+    }
+}
+
+void copyDiagText(char *dst, size_t dstSize, const char *src)
+{
+    if (dst == nullptr || dstSize == 0) {
+        return;
+    }
+    const char *safe = (src == nullptr || src[0] == '\0') ? "-" : src;
+    strncpy(dst, safe, dstSize - 1);
+    dst[dstSize - 1] = '\0';
+}
+
+void loopMarkStage(const char *stage)
+{
+    const char *safe = (stage == nullptr || stage[0] == '\0') ? "unknown" : stage;
+    if (strcmp(g_loopDiag.currentStage, safe) == 0) {
+        return;
+    }
+
+    g_loopDiag.currentStage = safe;
+    g_loopDiag.currentStageSinceMs = millis();
+}
+
+bool i2cWireTraceShouldPrint(bool force)
+{
+    if (force || I2C_WIRE_TRACE_SAMPLE_EVERY <= 1U) {
+        return true;
+    }
+    return (g_i2cDiag.activeSeq % I2C_WIRE_TRACE_SAMPLE_EVERY) == 0U;
+}
+
+void i2cTraceWireStep(uint8_t id,
+                      const char *origin,
+                      const char *phase,
+                      int32_t value = -1,
+                      bool force = false)
+{
+    if (!i2cWireTraceShouldPrint(force)) {
+        return;
+    }
+
+    const char *safeOrigin = (origin == nullptr || origin[0] == '\0') ? "-" : origin;
+    const char *safePhase = (phase == nullptr || phase[0] == '\0') ? "unknown" : phase;
+
+    Serial.print("I2C TRACE: wire seq=");
+    Serial.print(g_i2cDiag.activeSeq);
+    Serial.print(", id=");
+    Serial.print(id);
+    Serial.print(", origin=");
+    Serial.print(safeOrigin);
+    Serial.print(", phase=");
+    Serial.print(safePhase);
+    if (value >= 0) {
+        Serial.print(", value=");
+        Serial.print(value);
+    }
+    Serial.println();
+}
+
+void scanDiagStart(uint8_t id, const char *origin)
+{
+    ScanDiagState &diag = g_scanDiag;
+    const uint32_t now = millis();
+    diag.active = true;
+    diag.activeId = id;
+    diag.activeStartedMs = now;
+    diag.lastStartedMs = now;
+    copyDiagText(diag.activeOrigin, sizeof(diag.activeOrigin), origin);
+}
+
+void scanDiagFinish(uint8_t id, MbResult result, uint8_t exceptionCode)
+{
+    ScanDiagState &diag = g_scanDiag;
+    const uint32_t now = millis();
+    const uint32_t elapsedMs = diag.active
+        ? static_cast<uint32_t>(now - diag.activeStartedMs)
+        : 0U;
+
+    diag.active = false;
+    diag.lastId = id;
+    diag.lastException = exceptionCode;
+    diag.lastFinishedMs = now;
+    diag.lastDurationMs = elapsedMs;
+    copyDiagText(diag.lastOrigin, sizeof(diag.lastOrigin), diag.activeOrigin);
+    copyDiagText(diag.lastResult, sizeof(diag.lastResult), mbResultCode(result));
+    if (result == MbResult::Exception) {
+        snprintf(diag.lastResult, sizeof(diag.lastResult), "exception_0x%02X", exceptionCode);
+    }
+}
+
+void printScanDiagStatusLine()
+{
+    const uint32_t now = millis();
+    Serial.print("MBSCAN diag: enabled=");
+    Serial.print(g_rs485ScanEnabled ? "yes" : "no");
+    Serial.print(", last_id=");
+    Serial.print(g_scanDiag.lastId);
+    Serial.print(", last_origin=");
+    Serial.print(g_scanDiag.lastOrigin);
+    Serial.print(", last_result=");
+    Serial.print(g_scanDiag.lastResult);
+    Serial.print(", last_ms=");
+    Serial.print(g_scanDiag.lastDurationMs);
+    Serial.print(", active=");
+    Serial.print(g_scanDiag.active ? "yes" : "no");
+    if (g_scanDiag.active) {
+        Serial.print(", active_id=");
+        Serial.print(g_scanDiag.activeId);
+        Serial.print(", active_origin=");
+        Serial.print(g_scanDiag.activeOrigin);
+        Serial.print(", active_ms=");
+        Serial.print(static_cast<uint32_t>(now - g_scanDiag.activeStartedMs));
+    }
+    Serial.print(", i2c_unfinished=");
+    Serial.print(g_i2cDiag.active ? "yes" : "no");
+    Serial.print(", i2c_op=");
+    Serial.print(g_i2cDiag.active ? g_i2cDiag.activeOp : g_i2cDiag.lastOp);
+    Serial.print("@");
+    Serial.print(g_i2cDiag.active ? g_i2cDiag.activeOrigin : g_i2cDiag.lastOrigin);
+    Serial.println();
+}
+
+void i2cCheckActiveGuard()
+{
+    if (!g_i2cDiag.active) {
+        return;
+    }
+
+    const uint32_t now = millis();
+    const uint32_t activeMs = static_cast<uint32_t>(now - g_i2cDiag.activeStartedMs);
+    if (activeMs < I2C_ACTIVE_GUARD_MS) {
+        return;
+    }
+
+    if (g_i2cDiag.lastGuardSeq == g_i2cDiag.activeSeq) {
+        return;
+    }
+
+    g_i2cDiag.lastGuardSeq = g_i2cDiag.activeSeq;
+    g_i2cDiag.lastGuardMs = now;
+    g_i2cDiag.guardTripCount++;
+
+    Serial.print("I2C GUARD: active op timeout, seq=");
+    Serial.print(g_i2cDiag.activeSeq);
+    Serial.print(", op=");
+    Serial.print(g_i2cDiag.activeOp);
+    Serial.print(", id=");
+    Serial.print(g_i2cDiag.activeId);
+    Serial.print(", origin=");
+    Serial.print(g_i2cDiag.activeOrigin);
+    Serial.print(", ms=");
+    Serial.println(activeMs);
+
+    i2cDiagFinish(false, "guard_timeout");
+    i2cRecoverBus("active op guard timeout");
+}
+
+void loopPrintHeartbeat()
+{
+    const uint32_t now = millis();
+    if ((uint32_t)(now - g_loopHeartbeatLastMs) < LOOP_HEARTBEAT_INTERVAL_MS) {
+        return;
+    }
+    g_loopHeartbeatLastMs = now;
+
+    Serial.print("HEARTBEAT: stage=");
+    Serial.print(g_loopDiag.currentStage);
+    Serial.print(", stage_ms=");
+    Serial.print(static_cast<uint32_t>(now - g_loopDiag.currentStageSinceMs));
+    Serial.print(", common=");
+    Serial.print(commonCycleStageName(g_commonCycle.stage));
+    Serial.print(", i2c_seq=");
+    Serial.print(g_i2cDiag.opSeq);
+    Serial.print(", i2c_active=");
+    Serial.print(g_i2cDiag.active ? "yes" : "no");
+    if (g_i2cDiag.active) {
+        Serial.print(", i2c_active_ms=");
+        Serial.print(static_cast<uint32_t>(now - g_i2cDiag.activeStartedMs));
+        Serial.print(", i2c_active_op=");
+        Serial.print(g_i2cDiag.activeOp);
+        Serial.print("@");
+        Serial.print(g_i2cDiag.activeOrigin);
+    } else {
+        Serial.print(", i2c_last=");
+        Serial.print(g_i2cDiag.lastOp);
+        Serial.print("@");
+        Serial.print(g_i2cDiag.lastOrigin);
+        Serial.print("/");
+        Serial.print(g_i2cDiag.lastOutcome);
+    }
+    Serial.println();
+}
+
+void i2cDiagStart(uint8_t id, const char *op, const char *origin, const char *detail)
+{
+    I2cDiagState &diag = g_i2cDiag;
+    const uint32_t now = millis();
+
+    diag.active = true;
+    diag.activeSeq = ++diag.opSeq;
+    diag.activeStartedMs = now;
+    diag.activeId = id;
+    copyDiagText(diag.activeOp, sizeof(diag.activeOp), op);
+    copyDiagText(diag.activeOrigin, sizeof(diag.activeOrigin), origin);
+    copyDiagText(diag.activeDetail, sizeof(diag.activeDetail), detail);
+
+    const bool sameContext =
+        strcmp(diag.lastOp, diag.activeOp) == 0 &&
+        strcmp(diag.lastOrigin, diag.activeOrigin) == 0 &&
+        strcmp(diag.lastDetail, diag.activeDetail) == 0;
+    if (sameContext && (uint32_t)(now - diag.lastStartTraceMs) < I2C_START_TRACE_THROTTLE_MS) {
+        return;
+    }
+
+    diag.lastStartTraceMs = now;
+    Serial.print("I2C TRACE: start seq=");
+    Serial.print(diag.activeSeq);
+    Serial.print(", op=");
+    Serial.print(diag.activeOp);
+    Serial.print(", id=");
+    Serial.print(id);
+    Serial.print(", origin=");
+    Serial.print(diag.activeOrigin);
+    Serial.print(", detail=");
+    Serial.println(diag.activeDetail);
+}
+
+void i2cDiagFinish(bool ok, const char *outcome)
+{
+    I2cDiagState &diag = g_i2cDiag;
+    if (!diag.active) {
+        return;
+    }
+
+    const uint32_t now = millis();
+    const uint32_t elapsedMs = static_cast<uint32_t>(now - diag.activeStartedMs);
+    diag.active = false;
+    diag.lastCompletedMs = now;
+    diag.lastDurationMs = elapsedMs;
+    if (elapsedMs > diag.maxDurationMs) {
+        diag.maxDurationMs = elapsedMs;
+    }
+    if (!ok) {
+        diag.failCount++;
+    }
+    if (elapsedMs >= I2C_WARN_LATENCY_MS) {
+        diag.slowCount++;
+    }
+
+    diag.lastId = diag.activeId;
+    copyDiagText(diag.lastOp, sizeof(diag.lastOp), diag.activeOp);
+    copyDiagText(diag.lastOrigin, sizeof(diag.lastOrigin), diag.activeOrigin);
+    copyDiagText(diag.lastDetail, sizeof(diag.lastDetail), diag.activeDetail);
+    copyDiagText(diag.lastOutcome, sizeof(diag.lastOutcome), outcome);
+
+    if (ok && elapsedMs < I2C_WARN_LATENCY_MS) {
+        return;
+    }
+
+    Serial.print("I2C TRACE: done seq=");
+    Serial.print(diag.activeSeq);
+    Serial.print(", op=");
+    Serial.print(diag.lastOp);
+    Serial.print(", id=");
+    Serial.print(diag.lastId);
+    Serial.print(", result=");
+    Serial.print(diag.lastOutcome);
+    Serial.print(", ms=");
+    Serial.print(elapsedMs);
+    Serial.print(", loop_stage=");
+    Serial.print(g_loopDiag.currentStage);
+    Serial.print(", common_stage=");
+    Serial.print(commonCycleStageName(g_commonCycle.stage));
+    Serial.print(", pause=");
+    Serial.println(commonPauseStateName(g_commonCycle.pauseState));
+}
+
+void i2cRecoverBus(const char *reason)
+{
+    const uint32_t now = millis();
+    if ((uint32_t)(now - g_i2cLastRecoverMs) < I2C_RECOVER_COOLDOWN_MS) {
+        return;
+    }
+    g_i2cLastRecoverMs = now;
+
+    Serial.print("I2C RECOVER: ");
+    Serial.print((reason == nullptr || reason[0] == '\0') ? "reason=unknown" : reason);
+    Serial.print(", last=");
+    Serial.print(g_i2cDiag.lastOp);
+    Serial.print("@");
+    Serial.print(g_i2cDiag.lastOrigin);
+    Serial.println(".");
+
+    Wire.end();
+    delay(2);
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_CLOCK_HZ);
+    Wire.setTimeOut(I2C_TIMEOUT_MS);
 }
 
 bool deviceStatusBusy(const Rs485DeviceState &st)
@@ -310,17 +721,47 @@ bool conveyorBatchReady(const Rs485DeviceState &st)
 
 uint8_t conveyorFlagState(const Rs485DeviceState &st)
 {
-    return static_cast<uint8_t>(st.extra0 & 0x00FFU);
+    return static_cast<uint8_t>(st.extra0 & CONVEYOR_EXTRA0_FLAG_MASK);
 }
 
 uint8_t conveyorMotionState(const Rs485DeviceState &st)
 {
-    return static_cast<uint8_t>((st.extra0 >> 8) & 0x00FFU);
+    return static_cast<uint8_t>((st.extra0 >> CONVEYOR_EXTRA0_MOTION_SHIFT) &
+                                CONVEYOR_EXTRA0_MOTION_MASK);
+}
+
+bool conveyorVfdTimedRunActive(const Rs485DeviceState &st)
+{
+    return (st.extra0 & CONVEYOR_EXTRA0_VFD_TIMED_RUN_ACTIVE_BIT) != 0U;
 }
 
 uint32_t conveyorVfdTickDurationMs(const Rs485DeviceState &st)
 {
     return static_cast<uint32_t>(st.extra1) * 10U;
+}
+
+bool conveyorSealerBusy(const Rs485DeviceState &st)
+{
+    return (st.extra0 & CONVEYOR_EXTRA0_SEALER_BUSY_BIT) != 0U;
+}
+
+bool conveyorSealerStartPulseActive(const Rs485DeviceState &st)
+{
+    return (st.extra0 & CONVEYOR_EXTRA0_SEALER_START_PULSE_BIT) != 0U;
+}
+
+bool conveyorSealerDoneActive(const Rs485DeviceState &st)
+{
+    return (st.extra0 & CONVEYOR_EXTRA0_SEALER_DONE_ACTIVE_BIT) != 0U;
+}
+
+uint8_t conveyorSealerCompletionSeq(const Rs485DeviceState &st)
+{
+    const uint8_t low = static_cast<uint8_t>((st.extra0 >> CONVEYOR_EXTRA0_SEALER_SEQ_LOW_SHIFT) &
+                                             CONVEYOR_EXTRA0_SEALER_SEQ_LOW_MASK);
+    const uint8_t high = static_cast<uint8_t>((st.extra0 >> CONVEYOR_EXTRA0_SEALER_SEQ_HIGH_SHIFT) &
+                                              CONVEYOR_EXTRA0_SEALER_SEQ_HIGH_MASK);
+    return static_cast<uint8_t>(low | (high << 6));
 }
 
 bool conveyorStep2Active(const Rs485DeviceState &st)
@@ -345,7 +786,17 @@ uint8_t conveyorProgramStateCode(const Rs485DeviceState &st)
 
 uint8_t conveyorProgramPass(const Rs485DeviceState &st)
 {
-    return static_cast<uint8_t>((st.extra2 >> 8) & 0x00FFU);
+    return static_cast<uint8_t>((st.extra2 >> 8) & CONVEYOR_EXTRA2_PROGRAM_PASS_MASK);
+}
+
+bool conveyorFeedSideEmptyStrict(const Rs485DeviceState &st)
+{
+    return (st.extra2 & CONVEYOR_EXTRA2_FEED_SIDE_EMPTY_STRICT_BIT) != 0U;
+}
+
+bool conveyorFeedSideEmptyValid(const Rs485DeviceState &st)
+{
+    return (st.extra2 & CONVEYOR_EXTRA2_FEED_SIDE_EMPTY_VALID_BIT) != 0U;
 }
 
 uint16_t manipulatorSensorBits(const Rs485DeviceState &st)
@@ -368,6 +819,11 @@ bool manipulatorStep7Ready(const Rs485DeviceState &st)
     return (st.statusWord & MANIPULATOR_STATUS_STEP7_READY_BIT) != 0;
 }
 
+bool manipulatorStep3Ready(const Rs485DeviceState &st)
+{
+    return (st.statusWord & MANIPULATOR_STATUS_STEP3_READY_BIT) != 0;
+}
+
 bool manipulatorInWorkStartPose(const Rs485DeviceState &st)
 {
     const uint16_t bits = manipulatorSensorBits(st);
@@ -385,60 +841,75 @@ bool manipulatorNeedsOnlyGripOpenForWorkStart(const Rs485DeviceState &st)
            (bits & MANIPULATOR_SENSOR_GRIP_OPEN_BIT) == 0;
 }
 
-void sealWriteStartOutput(bool active)
+bool conveyorSealerOnline()
 {
-    digitalWrite(PIN_SEAL_START, active ? SEAL_START_ACTIVE_LEVEL : !SEAL_START_ACTIVE_LEVEL);
-    g_sealStartOutputActive = active;
-}
-
-bool sealIsDoneActive()
-{
-    return digitalRead(PIN_SEAL_DONE) == SEAL_DONE_ACTIVE_LEVEL;
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    return conveyor.online && conveyor.protocolOk;
 }
 
 void printSealStatus()
 {
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
     Serial.print("SEAL: start_out=");
-    Serial.print(g_sealStartOutputActive ? "on" : "off");
+    Serial.print(conveyorSealerStartPulseActive(conveyor) ? "on" : "off");
     Serial.print(", done=");
-    Serial.print(sealIsDoneActive() ? "active" : "inactive");
-    Serial.print(", pin_start=");
-    Serial.print(PIN_SEAL_START);
-    Serial.print(", pin_done=");
-    Serial.print(PIN_SEAL_DONE);
+    Serial.print(conveyorSealerDoneActive(conveyor) ? "active" : "inactive");
+    Serial.print(", busy=");
+    Serial.print(conveyorSealerBusy(conveyor) ? "yes" : "no");
+    Serial.print(", owner=conveyor(12)");
+    Serial.print(", online=");
+    Serial.print(conveyorSealerOnline() ? "yes" : "no");
     Serial.print(", pulse_ms=");
     Serial.println(g_sealStartPulseDurationMs);
 }
 
 void processSealIo()
 {
-    const bool doneActive = sealIsDoneActive();
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    if (!conveyor.online || !conveyor.protocolOk) {
+        g_sealStartPulseActive = false;
+        g_sealStartOutputActive = false;
+        g_sealDoneLastActive = false;
+        g_sealRemoteObserved = false;
+        return;
+    }
+
+    const bool doneActive = conveyorSealerDoneActive(conveyor);
+    const bool startPulseActive = conveyorSealerStartPulseActive(conveyor);
+    const uint8_t completionSeq = conveyorSealerCompletionSeq(conveyor);
+    g_sealStartPulseActive = startPulseActive;
+    g_sealStartOutputActive = startPulseActive;
+
+    if (!g_sealRemoteObserved) {
+        g_sealRemoteObserved = true;
+        g_sealDoneLastActive = doneActive;
+        g_sealCompletionSeqLast = completionSeq;
+        return;
+    }
+
+    bool changed = false;
+    if (completionSeq != g_sealCompletionSeqLast) {
+        g_sealCompletionSeqLast = completionSeq;
+        g_sealDoneLastRiseMs = millis();
+        g_commonCycle.sealerDonePendingUnload = true;
+        Serial.println("SEAL: conveyor cycle complete latched.");
+        g_lastCommandResult = "SEAL cycle completed";
+        changed = true;
+    }
+
     if (doneActive != g_sealDoneLastActive) {
         g_sealDoneLastActive = doneActive;
         if (doneActive) {
-            g_sealDoneLastRiseMs = millis();
             Serial.println("SEAL: cycle complete input became active.");
-            g_lastCommandResult = "SEAL cycle completed";
         } else {
             Serial.println("SEAL: cycle complete input released.");
         }
+        changed = true;
+    }
+
+    if (changed) {
         (void)mqttPublishStatus(false);
     }
-
-    if (!g_sealStartPulseActive) {
-        return;
-    }
-
-    const uint32_t nowMs = millis();
-    if ((uint32_t)(nowMs - g_sealStartPulseStartedMs) < g_sealStartPulseDurationMs) {
-        return;
-    }
-
-    sealWriteStartOutput(false);
-    g_sealStartPulseActive = false;
-    Serial.println("SEAL: start pulse finished.");
-    g_lastCommandResult = "SEAL START pulse finished";
-    (void)mqttPublishStatus(false);
 }
 
 void handleCommandSeal(String args)
@@ -448,10 +919,10 @@ void handleCommandSeal(String args)
 
     if (sub.isEmpty() || sub == "H" || sub == "HELP") {
         Serial.println("SEAL commands:");
-        Serial.println("  SEAL START [ms]   - pulse START relay on GPIO23 (default 300 ms)");
-        Serial.println("  SEAL STATUS       - print START/DONE state");
-        Serial.println("  SEAL OUT ON       - force START relay ON for wiring test");
-        Serial.println("  SEAL OUT OFF      - force START relay OFF");
+        Serial.println("  SEAL START [ms]   - send START pulse to conveyor sealer (default 300 ms)");
+        Serial.println("  SEAL STATUS       - print conveyor START/DONE state");
+        Serial.println("  SEAL OUT ON       - force conveyor START output ON for wiring test");
+        Serial.println("  SEAL OUT OFF      - force conveyor START output OFF");
         return;
     }
 
@@ -465,15 +936,31 @@ void handleCommandSeal(String args)
         String mode = nextToken(args);
         mode.toUpperCase();
         if (mode == "ON") {
-            g_sealStartPulseActive = false;
-            sealWriteStartOutput(true);
+            if (!conveyorSealerOnline()) {
+                g_lastCommandResult = "SEAL OUT failed: conveyor offline";
+                Serial.println(g_lastCommandResult);
+                return;
+            }
+            if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "SEAL OUT ON", "seal_cmd_out_on")) {
+                g_lastCommandResult = "SEAL OUT failed: send error";
+                Serial.println(g_lastCommandResult);
+                return;
+            }
             g_lastCommandResult = "SEAL OUT ON";
             Serial.println(g_lastCommandResult);
             return;
         }
         if (mode == "OFF") {
-            g_sealStartPulseActive = false;
-            sealWriteStartOutput(false);
+            if (!conveyorSealerOnline()) {
+                g_lastCommandResult = "SEAL OUT failed: conveyor offline";
+                Serial.println(g_lastCommandResult);
+                return;
+            }
+            if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "SEAL OUT OFF", "seal_cmd_out_off")) {
+                g_lastCommandResult = "SEAL OUT failed: send error";
+                Serial.println(g_lastCommandResult);
+                return;
+            }
             g_lastCommandResult = "SEAL OUT OFF";
             Serial.println(g_lastCommandResult);
             return;
@@ -495,20 +982,25 @@ void handleCommandSeal(String args)
             }
         }
 
-        if (g_sealStartPulseActive) {
+        const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+        if (!conveyor.online || !conveyor.protocolOk) {
+            g_lastCommandResult = "SEAL START failed: conveyor offline";
+            Serial.println(g_lastCommandResult);
+            return;
+        }
+        if (conveyorSealerBusy(conveyor)) {
             g_lastCommandResult = "SEAL START ignored: pulse already active";
             Serial.println(g_lastCommandResult);
             return;
         }
 
         g_sealStartPulseDurationMs = pulseMs;
-        g_sealStartPulseStartedMs = millis();
-        g_sealStartPulseActive = true;
-        sealWriteStartOutput(true);
-
-        Serial.print("SEAL START: pulse on GPIO");
-        Serial.print(PIN_SEAL_START);
-        Serial.print(" for ");
+        if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "SEAL START " + String(pulseMs), "seal_cmd_start")) {
+            g_lastCommandResult = "SEAL START failed: send error";
+            Serial.println(g_lastCommandResult);
+            return;
+        }
+        Serial.print("SEAL START: pulse on conveyor for ");
         Serial.print(pulseMs);
         Serial.println(" ms.");
         g_lastCommandResult = "SEAL START pulse sent";
@@ -532,6 +1024,8 @@ void printCommonCycleStatus()
     Serial.print(g_commonCycle.active ? "yes" : "no");
     Serial.print(", pause=");
     Serial.print(g_commonCycle.pauseRequested ? "yes" : "no");
+    Serial.print(", pause_state=");
+    Serial.print(commonPauseStateName(g_commonCycle.pauseState));
     Serial.print(", stage=");
     Serial.print(commonCycleStageName(g_commonCycle.stage));
     Serial.print(", manip_starts=");
@@ -544,29 +1038,148 @@ void printCommonCycleStatus()
     Serial.print(conveyorBatchReady(conveyor) ? "yes" : "no");
     Serial.print(", conveyor_seq=");
     Serial.print(conveyorBatchSeq(conveyor));
+    Serial.print(", feed_empty_strict=");
+    Serial.print(conveyorFeedSideEmptyStrict(conveyor) ? "yes" : "no");
+    Serial.print(", feed_empty_valid=");
+    Serial.print(conveyorFeedSideEmptyValid(conveyor) ? "yes" : "no");
     Serial.print(", conveyor_p1_state=");
     Serial.print(conveyorProgramStateCode(conveyor));
     Serial.print(", conveyor_p1_pass=");
     Serial.print(conveyorProgramPass(conveyor));
     Serial.print(", manip_busy=");
     Serial.print(deviceStatusBusy(manipulator) ? "yes" : "no");
+    Serial.print(", manip_step3=");
+    Serial.print(manipulatorStep3Ready(manipulator) ? "yes" : "no");
     Serial.print(", manip_step7=");
     Serial.print(manipulatorStep7Ready(manipulator) ? "yes" : "no");
     Serial.print(", manip_step=");
     Serial.print(manipulatorWorkStep(manipulator));
     Serial.print(", otvod_ready=");
     Serial.print(g_otvodWorkCycle.readyForBatch ? "yes" : "no");
+    Serial.print(", sealer_done_pending_unload=");
+    Serial.print(g_commonCycle.sealerDonePendingUnload ? "yes" : "no");
     Serial.print(", seal_age_ms=");
     Serial.print(sealAgeMs);
+    Serial.print(", i2c_last=");
+    Serial.print(g_i2cDiag.lastOp);
+    Serial.print("@");
+    Serial.print(g_i2cDiag.lastOrigin);
+    Serial.print("/");
+    Serial.print(g_i2cDiag.lastOutcome);
+    Serial.print("/");
+    Serial.print(g_i2cDiag.lastDurationMs);
+    Serial.print("ms");
+    if (g_i2cDiag.active) {
+        Serial.print(", i2c_active=");
+        Serial.print(g_i2cDiag.activeOp);
+        Serial.print("@");
+        Serial.print(g_i2cDiag.activeOrigin);
+        Serial.print("/");
+        Serial.print(static_cast<uint32_t>(nowMs - g_i2cDiag.activeStartedMs));
+        Serial.print("ms");
+    }
     Serial.print(", last=");
     Serial.println(g_commonCycle.lastEvent);
 }
 
+bool commonFeedSideCollectsLastBlock(const Rs485DeviceState &conveyor)
+{
+    if (!conveyorFeedSideEmptyValid(conveyor)) {
+        return false;
+    }
+    return !conveyorFeedSideEmptyStrict(conveyor);
+}
+
+bool commonFeedSideEmpty(const Rs485DeviceState &conveyor)
+{
+    return conveyorFeedSideEmptyValid(conveyor) && conveyorFeedSideEmptyStrict(conveyor);
+}
+
+bool commonFeedSideSnapshotKnown(const Rs485DeviceState &conveyor)
+{
+    return conveyorFeedSideEmptyValid(conveyor);
+}
+
+void commonSetPauseWaitsStrictFeedSnapshot()
+{
+    g_commonCycle.pauseState = CommonPauseState::Requested;
+    if (g_commonCycle.lastEvent != "COMMON: pause waits strict feed snapshot") {
+        g_commonCycle.lastEvent = "COMMON: pause waits strict feed snapshot";
+        g_lastCommandResult = g_commonCycle.lastEvent;
+        Serial.println(g_lastCommandResult);
+        (void)mqttPublishStatus(false);
+    }
+}
+
+bool commonSealerDoneStable(uint32_t nowMs)
+{
+    if (!g_commonCycle.sealerDonePendingUnload || g_sealDoneLastRiseMs == 0) {
+        return false;
+    }
+    return static_cast<uint32_t>(nowMs - g_sealDoneLastRiseMs) >= COMMON_CYCLE_SEAL_SETTLE_MS;
+}
+
+bool commonSealerDoneForCurrentCycle(uint32_t nowMs)
+{
+    if (!commonSealerDoneStable(nowMs)) {
+        return false;
+    }
+    if (g_commonCycle.sealStartedMs == 0) {
+        return true;
+    }
+    return g_sealDoneLastRiseMs > g_commonCycle.sealStartedMs;
+}
+
+bool commonSealerEmptyConfirmed(const Rs485DeviceState &conveyor, uint32_t nowMs)
+{
+    if (g_commonCycle.sealerDonePendingUnload) {
+        return false;
+    }
+    if (conveyorSealerBusy(conveyor) || conveyorSealerDoneActive(conveyor)) {
+        return false;
+    }
+    if (g_commonCycle.currentCycleLoadsSealer && !commonSealerDoneForCurrentCycle(nowMs)) {
+        return false;
+    }
+    return true;
+}
+
+bool commonTryEnterPauseStableWait(const Rs485DeviceState &conveyor, uint32_t nowMs)
+{
+    if (!commonSealerEmptyConfirmed(conveyor, nowMs)) {
+        g_commonCycle.pauseState = CommonPauseState::Requested;
+        if (g_commonCycle.lastEvent != "COMMON: pause waits SEALER empty") {
+            g_commonCycle.lastEvent = "COMMON: pause waits SEALER empty";
+            g_lastCommandResult = g_commonCycle.lastEvent;
+            Serial.println(g_lastCommandResult);
+            (void)mqttPublishStatus(false);
+        }
+        return false;
+    }
+
+    g_commonCycle.pauseState = CommonPauseState::StableWait;
+    if (g_commonCycle.lastEvent != "COMMON: pause_stable_wait") {
+        g_commonCycle.lastEvent = "COMMON: pause_stable_wait";
+        g_lastCommandResult = g_commonCycle.lastEvent;
+        Serial.println(g_lastCommandResult);
+        (void)mqttPublishStatus(false);
+    }
+    return true;
+}
+
 void abortCommonCycle(const String &reason)
 {
+    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "FSINV", "common_abort_fsinv")) {
+        Serial.println("COMMON warning: CONV FSINV send error");
+    }
+
     g_commonCycle.active = false;
     g_commonCycle.pauseRequested = false;
+    g_commonCycle.pauseState = CommonPauseState::None;
+    g_commonCycle.step3LaunchDone = false;
     g_commonCycle.parallelLaunchDone = false;
+    g_commonCycle.currentCycleLoadsSealer = false;
+    g_commonCycle.sealerDonePendingUnload = false;
     g_commonCycle.stage = CommonCycleStage::Idle;
     g_commonCycle.lastEvent = reason;
     g_lastCommandResult = reason;
@@ -574,7 +1187,7 @@ void abortCommonCycle(const String &reason)
     (void)mqttPublishStatus(false);
 }
 
-bool sendCommonManipulatorWorkCycleCommand(const String &reason)
+bool sendCommonManipulatorWorkCycleCommand(const String &reason, bool cycleLoadsSealer)
 {
     const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
     if (!manipulator.online || !manipulator.protocolOk) {
@@ -587,13 +1200,23 @@ bool sendCommonManipulatorWorkCycleCommand(const String &reason)
         Serial.println(g_lastCommandResult);
         return false;
     }
-    if (!i2cSendManagedDeviceCommand(MANIPULATOR_ID, "R")) {
+    if (!i2cSendManagedDeviceCommand(MANIPULATOR_ID, "R", "common_man_start")) {
         g_lastCommandResult = "COMMON failed: MAN R send error";
         Serial.println(g_lastCommandResult);
         return false;
     }
 
+    if (cycleLoadsSealer && !i2cSendManagedDeviceCommand(CONVEYOR_ID, "FSC", "common_conv_fsc")) {
+        Serial.println("COMMON warning: CONV FSC sync send error");
+    }
+
+    if (g_commonCycle.sealerDonePendingUnload) {
+        g_commonCycle.sealerDonePendingUnload = false;
+    }
+
     g_commonCycle.stage = CommonCycleStage::WaitManipStep7;
+    g_commonCycle.currentCycleLoadsSealer = cycleLoadsSealer;
+    g_commonCycle.step3LaunchDone = g_commonCycle.pauseRequested || !cycleLoadsSealer;
     g_commonCycle.parallelLaunchDone = false;
     g_commonCycle.manipStarts++;
     g_commonCycle.manipStartReason = reason;
@@ -604,7 +1227,7 @@ bool sendCommonManipulatorWorkCycleCommand(const String &reason)
     return true;
 }
 
-bool startCommonManipulatorWorkCycle(const String &reason)
+bool startCommonManipulatorWorkCycle(const String &reason, bool cycleLoadsSealer)
 {
     const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
     if (!manipulator.online || !manipulator.protocolOk) {
@@ -617,11 +1240,16 @@ bool startCommonManipulatorWorkCycle(const String &reason)
         Serial.println(g_lastCommandResult);
         return false;
     }
+
+    g_commonCycle.currentCycleLoadsSealer = cycleLoadsSealer;
+    g_commonCycle.step3LaunchDone = g_commonCycle.pauseRequested || !cycleLoadsSealer;
+    g_commonCycle.parallelLaunchDone = false;
+
     if (manipulatorInWorkStartPose(manipulator)) {
-        return sendCommonManipulatorWorkCycleCommand(reason);
+        return sendCommonManipulatorWorkCycleCommand(reason, cycleLoadsSealer);
     }
     if (manipulatorNeedsOnlyGripOpenForWorkStart(manipulator)) {
-        if (!i2cSendManagedDeviceCommand(MANIPULATOR_ID, "Q")) {
+        if (!i2cSendManagedDeviceCommand(MANIPULATOR_ID, "Q", "common_man_prepare_q")) {
             g_lastCommandResult = "COMMON failed: MAN Q send error";
             Serial.println(g_lastCommandResult);
             return false;
@@ -642,6 +1270,36 @@ bool startCommonManipulatorWorkCycle(const String &reason)
     return false;
 }
 
+bool startCommonInfeedFillAfterStep3()
+{
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    if (!conveyor.online || !conveyor.protocolOk) {
+        g_lastCommandResult = "COMMON failed: conveyor offline at step3";
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+
+    if (conveyorBatchReady(conveyor) || conveyorProgram1Active(conveyor)) {
+        g_commonCycle.step3LaunchDone = true;
+        return true;
+    }
+
+    if (deviceStatusBusy(conveyor)) {
+        return true;
+    }
+
+    if (!startCommonConveyorProgram1("parallel after step3")) {
+        return false;
+    }
+
+    g_commonCycle.step3LaunchDone = true;
+    g_commonCycle.lastEvent = "COMMON: step3 reached, started P1";
+    g_lastCommandResult = g_commonCycle.lastEvent;
+    Serial.println(g_lastCommandResult);
+    (void)mqttPublishStatus(false);
+    return true;
+}
+
 bool startCommonConveyorProgram1(const String &reason)
 {
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
@@ -650,7 +1308,7 @@ bool startCommonConveyorProgram1(const String &reason)
         Serial.println(g_lastCommandResult);
         return false;
     }
-    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "1")) {
+    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "1", "common_conv_p1")) {
         g_lastCommandResult = "COMMON failed: CONV 1 send error";
         Serial.println(g_lastCommandResult);
         return false;
@@ -663,32 +1321,53 @@ bool startCommonConveyorProgram1(const String &reason)
     return true;
 }
 
-bool startCommonParallelProcesses(uint32_t nowMs)
+bool startCommonStep7Processes(const Rs485DeviceState &conveyor, uint32_t nowMs)
 {
-    if (!startCommonConveyorProgram1("parallel after step7")) {
-        return false;
-    }
     if (!startOtvodWorkCycle()) {
         g_lastCommandResult = "COMMON failed: OTCYCLE start";
         Serial.println(g_lastCommandResult);
         return false;
     }
-    if (g_sealStartPulseActive) {
-        g_lastCommandResult = "COMMON failed: SEAL pulse already active";
-        Serial.println(g_lastCommandResult);
-        return false;
+
+    if (g_commonCycle.currentCycleLoadsSealer) {
+        if (!conveyor.online || !conveyor.protocolOk) {
+            g_lastCommandResult = "COMMON failed: conveyor offline at SEAL start";
+            Serial.println(g_lastCommandResult);
+            return false;
+        }
+        if (conveyorSealerBusy(conveyor)) {
+            g_lastCommandResult = "COMMON failed: SEAL pulse already active";
+            Serial.println(g_lastCommandResult);
+            return false;
+        }
+
+        g_sealStartPulseDurationMs = SEAL_START_PULSE_MS_DEFAULT;
+        if (!i2cSendManagedDeviceCommand(
+                CONVEYOR_ID,
+                "SEAL START " + String(g_sealStartPulseDurationMs),
+                "common_step7_seal_start")) {
+            g_lastCommandResult = "COMMON failed: CONV SEAL START send error";
+            Serial.println(g_lastCommandResult);
+            return false;
+        }
+        g_sealStartPulseActive = true;
+        g_sealStartOutputActive = true;
+        g_commonCycle.sealStartedMs = nowMs;
+        g_commonCycle.sealerDonePendingUnload = false;
+    } else {
+        g_commonCycle.sealStartedMs = 0;
+        g_commonCycle.sealerDonePendingUnload = false;
     }
 
-    g_sealStartPulseDurationMs = SEAL_START_PULSE_MS_DEFAULT;
-    g_sealStartPulseStartedMs = nowMs;
-    g_sealStartPulseActive = true;
-    sealWriteStartOutput(true);
-
+    g_commonCycle.step3LaunchDone = true;
     g_commonCycle.parallelLaunchDone = true;
     g_commonCycle.parallelStarts++;
-    g_commonCycle.sealStartedMs = nowMs;
     g_commonCycle.stage = CommonCycleStage::WaitNextBatch;
-    g_commonCycle.lastEvent = "COMMON: step7 reached, started P1 + OTCYCLE + SEAL";
+    if (g_commonCycle.currentCycleLoadsSealer) {
+        g_commonCycle.lastEvent = "COMMON: step7 reached, started OTCYCLE + SEAL";
+    } else {
+        g_commonCycle.lastEvent = "COMMON: step7 reached, started mandatory unload OTCYCLE";
+    }
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
     (void)mqttPublishStatus(false);
@@ -700,12 +1379,20 @@ bool startCommonCycle()
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
 
     if (g_commonCycle.active) {
-        if (g_commonCycle.pauseRequested) {
+        if (g_commonCycle.pauseRequested || g_commonCycle.pauseState == CommonPauseState::StableWait) {
             g_commonCycle.pauseRequested = false;
+            g_commonCycle.pauseState = CommonPauseState::None;
             g_commonCycle.lastEvent = "COMMON: pause released";
             g_lastCommandResult = g_commonCycle.lastEvent;
             Serial.println(g_lastCommandResult);
-            (void)mqttPublishStatus(false);
+            if (g_commonCycle.stage == CommonCycleStage::WaitNextBatch &&
+                !conveyorBatchReady(conveyor) &&
+                !deviceStatusBusy(conveyor) &&
+                !conveyorProgram1Active(conveyor)) {
+                (void)startCommonConveyorProgram1("resume fill");
+            } else {
+                (void)mqttPublishStatus(false);
+            }
             return true;
         }
         g_lastCommandResult = "COMMON already active";
@@ -716,13 +1403,17 @@ bool startCommonCycle()
     g_commonCycle = CommonCycleState{};
     g_commonCycle.active = true;
     g_commonCycle.stage = CommonCycleStage::WaitInitialBatch;
+    g_commonCycle.pauseState = CommonPauseState::None;
+    g_commonCycle.sealerDonePendingUnload = conveyor.online &&
+        conveyor.protocolOk &&
+        conveyorSealerDoneActive(conveyor);
     g_commonCycle.lastEvent = "COMMON: waiting initial batch";
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
 
     if (conveyorBatchReady(conveyor)) {
         g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
-        if (!startCommonManipulatorWorkCycle("initial batch ready")) {
+        if (!startCommonManipulatorWorkCycle("initial batch ready", true)) {
             abortCommonCycle("COMMON failed: initial manipulator start");
             return false;
         }
@@ -749,6 +1440,9 @@ void requestCommonCyclePause()
     }
 
     g_commonCycle.pauseRequested = true;
+    if (g_commonCycle.pauseState == CommonPauseState::None) {
+        g_commonCycle.pauseState = CommonPauseState::Requested;
+    }
     g_commonCycle.lastEvent = "COMMON: pause requested";
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
@@ -764,6 +1458,46 @@ void processCommonCycle()
     const uint32_t nowMs = millis();
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
     const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    const bool sealerDoneStable = commonSealerDoneStable(nowMs);
+    const bool feedSideKnown = commonFeedSideSnapshotKnown(conveyor);
+    const bool feedSideEmpty = commonFeedSideEmpty(conveyor);
+
+    if (g_commonCycle.stage != g_commonDiagLastStage) {
+        g_commonDiagLastStage = g_commonCycle.stage;
+        g_commonDiagStageSinceMs = nowMs;
+        g_commonDiagLastWaitLogMs = nowMs;
+        Serial.print("COMMON TRACE: stage=");
+        Serial.print(commonCycleStageName(g_commonCycle.stage));
+        Serial.print(", pause=");
+        Serial.print(commonPauseStateName(g_commonCycle.pauseState));
+        Serial.print(", event=");
+        Serial.println(g_commonCycle.lastEvent);
+    }
+
+    if ((uint32_t)(nowMs - g_commonDiagStageSinceMs) >= COMMON_DIAG_WAIT_LOG_MS &&
+        (uint32_t)(nowMs - g_commonDiagLastWaitLogMs) >= COMMON_DIAG_WAIT_LOG_MS) {
+        g_commonDiagLastWaitLogMs = nowMs;
+        Serial.print("COMMON TRACE: waiting stage=");
+        Serial.print(commonCycleStageName(g_commonCycle.stage));
+        Serial.print(", stage_ms=");
+        Serial.print(static_cast<uint32_t>(nowMs - g_commonDiagStageSinceMs));
+        Serial.print(", pause=");
+        Serial.print(commonPauseStateName(g_commonCycle.pauseState));
+        Serial.print(", conveyor_online=");
+        Serial.print(conveyor.online && conveyor.protocolOk ? "yes" : "no");
+        Serial.print(", manip_online=");
+        Serial.print(manipulator.online && manipulator.protocolOk ? "yes" : "no");
+        Serial.print(", otvod_ready=");
+        Serial.print(g_otvodWorkCycle.readyForBatch ? "yes" : "no");
+        Serial.print(", sealer_pending_unload=");
+        Serial.print(g_commonCycle.sealerDonePendingUnload ? "yes" : "no");
+        Serial.print(", seal_stable=");
+        Serial.print(sealerDoneStable ? "yes" : "no");
+        Serial.print(", feed_known=");
+        Serial.print(feedSideKnown ? "yes" : "no");
+        Serial.print(", feed_empty=");
+        Serial.println(feedSideEmpty ? "yes" : "no");
+    }
 
     switch (g_commonCycle.stage) {
         case CommonCycleStage::WaitInitialBatch:
@@ -771,6 +1505,39 @@ void processCommonCycle()
                 return;
             }
             if (!conveyorBatchReady(conveyor)) {
+                if (g_commonCycle.pauseRequested) {
+                    if (conveyorProgram1Active(conveyor)) {
+                        g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
+                        return;
+                    }
+                    if (!feedSideKnown) {
+                        commonSetPauseWaitsStrictFeedSnapshot();
+                        return;
+                    }
+                    if (!feedSideEmpty) {
+                        g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
+                        return;
+                    }
+                    if (g_commonCycle.sealerDonePendingUnload && sealerDoneStable) {
+                        if (!g_otvodWorkCycle.readyForBatch) {
+                            if (g_commonCycle.lastEvent !=
+                                "COMMON: pause waits OUT2 for mandatory unload") {
+                                g_commonCycle.lastEvent =
+                                    "COMMON: pause waits OUT2 for mandatory unload";
+                                g_lastCommandResult = g_commonCycle.lastEvent;
+                                Serial.println(g_lastCommandResult);
+                                (void)mqttPublishStatus(false);
+                            }
+                            return;
+                        }
+                        if (!startCommonManipulatorWorkCycle("pause mandatory unload", false)) {
+                            abortCommonCycle("COMMON failed: mandatory unload start");
+                        }
+                        return;
+                    }
+                    (void)commonTryEnterPauseStableWait(conveyor, nowMs);
+                    return;
+                }
                 if (!g_commonCycle.pauseRequested &&
                     !deviceStatusBusy(conveyor) &&
                     !conveyorProgram1Active(conveyor) &&
@@ -780,10 +1547,12 @@ void processCommonCycle()
                 return;
             }
             if (g_commonCycle.pauseRequested) {
-                return;
+                g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
             }
             g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
-            if (!startCommonManipulatorWorkCycle("initial batch ready")) {
+            if (!startCommonManipulatorWorkCycle(
+                    g_commonCycle.pauseRequested ? String("pause final block") : String("initial batch ready"),
+                    true)) {
                 abortCommonCycle("COMMON failed: manipulator start");
             }
             return;
@@ -799,7 +1568,8 @@ void processCommonCycle()
                 return;
             }
             if (!sendCommonManipulatorWorkCycleCommand(
-                    g_commonCycle.manipStartReason.isEmpty() ? String("prepared") : g_commonCycle.manipStartReason)) {
+                    g_commonCycle.manipStartReason.isEmpty() ? String("prepared") : g_commonCycle.manipStartReason,
+                    g_commonCycle.currentCycleLoadsSealer)) {
                 abortCommonCycle("COMMON failed: manipulator start after prepare");
             }
             return;
@@ -808,33 +1578,61 @@ void processCommonCycle()
             if (!manipulator.online || !manipulator.protocolOk) {
                 return;
             }
+            if (!g_commonCycle.step3LaunchDone &&
+                g_commonCycle.currentCycleLoadsSealer &&
+                !g_commonCycle.pauseRequested &&
+                deviceStatusBusy(manipulator) &&
+                manipulatorStep3Ready(manipulator)) {
+                if (!startCommonInfeedFillAfterStep3()) {
+                    abortCommonCycle("COMMON failed: parallel start after step3");
+                }
+                return;
+            }
             if (!g_commonCycle.parallelLaunchDone &&
                 deviceStatusBusy(manipulator) &&
                 manipulatorStep7Ready(manipulator)) {
-                if (!startCommonParallelProcesses(nowMs)) {
+                if (!g_commonCycle.step3LaunchDone &&
+                    g_commonCycle.currentCycleLoadsSealer &&
+                    !g_commonCycle.pauseRequested) {
+                    if (!startCommonInfeedFillAfterStep3()) {
+                        abortCommonCycle("COMMON failed: fallback start before step7");
+                        return;
+                    }
+                }
+                if (!startCommonStep7Processes(conveyor, nowMs)) {
                     abortCommonCycle("COMMON failed: parallel start after step7");
                 }
             }
             return;
 
         case CommonCycleStage::WaitNextBatch: {
-            const bool nextBatchReady = conveyorBatchReady(conveyor) &&
-                conveyorBatchSeq(conveyor) != 0 &&
-                conveyorBatchSeq(conveyor) != g_commonCycle.lastConsumedBatchSeq;
             const bool manipulatorIdle = manipulator.online &&
                 manipulator.protocolOk &&
                 !deviceStatusBusy(manipulator);
-            const bool sealReady = g_sealDoneLastRiseMs > g_commonCycle.sealStartedMs &&
-                static_cast<uint32_t>(nowMs - g_sealDoneLastRiseMs) >= COMMON_CYCLE_SEAL_SETTLE_MS;
             const bool otvodReady = g_otvodWorkCycle.readyForBatch;
+            const bool cycleSettled = g_commonCycle.parallelLaunchDone &&
+                manipulatorIdle &&
+                otvodReady &&
+                (!g_commonCycle.currentCycleLoadsSealer || commonSealerDoneForCurrentCycle(nowMs));
 
-            if (!(nextBatchReady && manipulatorIdle && sealReady && otvodReady)) {
-                return;
-            }
+            if (!cycleSettled) {
+                const bool otvodFailedWhileWaiting =
+                    g_commonCycle.parallelLaunchDone &&
+                    !g_otvodWorkCycle.active &&
+                    !otvodReady;
+                if (otvodFailedWhileWaiting) {
+                    abortCommonCycle("COMMON failed: " + g_otvodWorkCycle.lastEvent);
+                    return;
+                }
 
-            if (g_commonCycle.pauseRequested) {
-                if (g_commonCycle.lastEvent != "COMMON: paused at safe point") {
-                    g_commonCycle.lastEvent = "COMMON: paused at safe point";
+                if (g_commonCycle.pauseRequested &&
+                    feedSideKnown &&
+                    feedSideEmpty &&
+                    g_commonCycle.sealerDonePendingUnload &&
+                    sealerDoneStable &&
+                    !otvodReady &&
+                    g_commonCycle.lastEvent != "COMMON: pause waits OUT2 for mandatory unload") {
+                    g_commonCycle.lastEvent = "COMMON: pause waits OUT2 for mandatory unload";
                     g_lastCommandResult = g_commonCycle.lastEvent;
                     Serial.println(g_lastCommandResult);
                     (void)mqttPublishStatus(false);
@@ -842,8 +1640,68 @@ void processCommonCycle()
                 return;
             }
 
+            const bool feedHasBatch = conveyorBatchReady(conveyor);
+            const bool feedCollecting = feedSideKnown && !feedSideEmpty;
+            const bool nextBatchReady = conveyorBatchReady(conveyor) &&
+                conveyorBatchSeq(conveyor) != 0 &&
+                conveyorBatchSeq(conveyor) != g_commonCycle.lastConsumedBatchSeq;
+
+            if (g_commonCycle.pauseRequested) {
+                if (feedHasBatch) {
+                    g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
+                    if (!startCommonManipulatorWorkCycle("pause final block", true)) {
+                        abortCommonCycle("COMMON failed: pause final block start");
+                    }
+                    return;
+                }
+
+                if (conveyorProgram1Active(conveyor)) {
+                    g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
+                    if (g_commonCycle.lastEvent != "COMMON: pause_fill_last_block waiting batch") {
+                        g_commonCycle.lastEvent = "COMMON: pause_fill_last_block waiting batch";
+                        g_lastCommandResult = g_commonCycle.lastEvent;
+                        Serial.println(g_lastCommandResult);
+                        (void)mqttPublishStatus(false);
+                    }
+                    return;
+                }
+
+                if (!feedSideKnown) {
+                    commonSetPauseWaitsStrictFeedSnapshot();
+                    return;
+                }
+
+                if (feedCollecting) {
+                    g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
+                    return;
+                }
+
+                if (g_commonCycle.sealerDonePendingUnload && sealerDoneStable) {
+                    if (!startCommonManipulatorWorkCycle("pause mandatory unload", false)) {
+                        abortCommonCycle("COMMON failed: mandatory unload start");
+                    }
+                    return;
+                }
+
+                (void)commonTryEnterPauseStableWait(conveyor, nowMs);
+                return;
+            }
+
+            if (!nextBatchReady &&
+                !conveyorProgram1Active(conveyor) &&
+                !deviceStatusBusy(conveyor)) {
+                if (!startCommonConveyorProgram1("retry fill after step7")) {
+                    abortCommonCycle("COMMON failed: retry P1 after step7");
+                    return;
+                }
+            }
+
+            if (!nextBatchReady) {
+                return;
+            }
+
             g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
-            if (!startCommonManipulatorWorkCycle("next batch ready")) {
+            if (!startCommonManipulatorWorkCycle("next batch ready", true)) {
                 abortCommonCycle("COMMON failed: next manipulator start");
             }
             return;
@@ -933,7 +1791,7 @@ bool handleManagedDeviceConsoleCommand(uint8_t id, const char *label, String arg
         return false;
     }
 
-    if (!i2cSendManagedDeviceCommand(id, command)) {
+    if (!i2cSendManagedDeviceCommand(id, command, "cli_managed_cmd")) {
         Serial.print(label);
         Serial.println(": send failed.");
         g_lastCommandResult = String(label) + " command failed: send";
@@ -1016,14 +1874,7 @@ uint32_t checksumManagedDeviceFrame(const ManagedDeviceI2cFrame &frame)
     return sum;
 }
 
-bool i2cPokeManagedDevice(uint8_t id)
-{
-    Wire.beginTransmission(id);
-    Wire.write(I2C_MANAGED_POKE_CMD);
-    return Wire.endTransmission(true) == 0;
-}
-
-bool i2cSendManagedDeviceCommand(uint8_t id, const String &command)
+bool i2cSendManagedDeviceCommand(uint8_t id, const String &command, const char *origin)
 {
     String text = command;
     text.trim();
@@ -1031,37 +1882,77 @@ bool i2cSendManagedDeviceCommand(uint8_t id, const String &command)
         return false;
     }
 
+    char detail[40] = {};
+    snprintf(detail, sizeof(detail), "cmd:%s", text.c_str());
+    i2cDiagStart(id, "cmd", origin, detail);
+
     Wire.beginTransmission(id);
     Wire.write(I2C_MANAGED_TEXT_CMD);
     Wire.write(reinterpret_cast<const uint8_t *>(text.c_str()), text.length());
-    return Wire.endTransmission(true) == 0;
+    const uint8_t txErr = Wire.endTransmission(true);
+    if (txErr == 0) {
+        i2cDiagFinish(true, "ok");
+        return true;
+    }
+
+    char outcome[24] = {};
+    snprintf(outcome, sizeof(outcome), "tx_err_%u", txErr);
+    i2cDiagFinish(false, outcome);
+    i2cRecoverBus("managed command tx error");
+    return false;
 }
 
-MbResult i2cReadManagedDeviceFrame(uint8_t id, ManagedDeviceI2cFrame &frame)
+MbResult i2cReadManagedDeviceFrame(uint8_t id, ManagedDeviceI2cFrame &frame, const char *origin)
 {
     memset(&frame, 0, sizeof(frame));
 
-    if (!i2cPokeManagedDevice(id)) {
+    i2cDiagStart(id, "read", origin, "managed frame");
+
+    i2cTraceWireStep(id, origin, "pre_begin_tx");
+    Wire.beginTransmission(id);
+    Wire.write(I2C_MANAGED_POKE_CMD);
+    const uint8_t pokeErr = Wire.endTransmission(true);
+    i2cTraceWireStep(id, origin, "post_end_tx", pokeErr, pokeErr != 0);
+    if (pokeErr != 0) {
+        char outcome[24] = {};
+        snprintf(outcome, sizeof(outcome), "poke_err_%u", pokeErr);
+        i2cDiagFinish(false, outcome);
+        i2cRecoverBus("managed poke tx error");
         return MbResult::Timeout;
     }
 
     const size_t want = sizeof(frame);
+    i2cTraceWireStep(id, origin, "pre_request", static_cast<int32_t>(want));
     const size_t got = Wire.requestFrom(static_cast<int>(id), static_cast<int>(want), true);
+    i2cTraceWireStep(id, origin, "post_request", static_cast<int32_t>(got), got != want);
     if (got != want) {
         while (Wire.available() > 0) {
             (void)Wire.read();
         }
-        return got == 0 ? MbResult::Timeout : MbResult::ProtocolError;
+        if (got == 0) {
+            i2cDiagFinish(false, "timeout");
+            i2cRecoverBus("managed frame timeout");
+            return MbResult::Timeout;
+        }
+        i2cDiagFinish(false, "short_frame");
+        i2cRecoverBus("managed frame short read");
+        return MbResult::ProtocolError;
     }
 
     uint8_t *dst = reinterpret_cast<uint8_t *>(&frame);
+    i2cTraceWireStep(id, origin, "read_begin", static_cast<int32_t>(want));
     for (size_t i = 0; i < want; i++) {
         if (Wire.available() <= 0) {
+            i2cTraceWireStep(id, origin, "read_underflow", static_cast<int32_t>(i), true);
+            i2cDiagFinish(false, "underflow");
+            i2cRecoverBus("managed frame underflow");
             return MbResult::ProtocolError;
         }
         dst[i] = static_cast<uint8_t>(Wire.read());
     }
+    i2cTraceWireStep(id, origin, "read_done", static_cast<int32_t>(want));
 
+    i2cDiagFinish(true, "ok");
     return MbResult::Ok;
 }
 
@@ -1131,14 +2022,14 @@ void rs485ProbeVfd(uint8_t id)
     }
 }
 
-void rs485ProbeManagedDevice(uint8_t id, uint16_t expectedKind)
+void rs485ProbeManagedDevice(uint8_t id, uint16_t expectedKind, const char *origin)
 {
     Rs485DeviceState &st = g_rs485Devices[id];
     const uint32_t now = millis();
     st.lastProbeMs = now;
 
     ManagedDeviceI2cFrame frame = {};
-    const MbResult r = i2cReadManagedDeviceFrame(id, frame);
+    const MbResult r = i2cReadManagedDeviceFrame(id, frame, origin);
     st.lastResult = r;
     st.lastException = 0;
 
@@ -1210,22 +2101,28 @@ String rs485OnlineIdsCsv()
     return out;
 }
 
-void rs485ScanProbeId(uint8_t id)
+void rs485ScanProbeId(uint8_t id, const char *scanOrigin)
 {
     if (id == 0 || id > RS485_SCAN_TABLE_MAX_ID) {
         return;
     }
 
+    Rs485DeviceState &st = g_rs485Devices[id];
+    scanDiagStart(id, scanOrigin);
+
     if (id == VFD_ID) {
         rs485ProbeVfd(id);
+        scanDiagFinish(id, st.lastResult, st.lastException);
         return;
     }
     if (id == CONVEYOR_ID) {
-        rs485ProbeManagedDevice(id, DEVICE_KIND_CONVEYOR);
+        rs485ProbeManagedDevice(id, DEVICE_KIND_CONVEYOR, "scan");
+        scanDiagFinish(id, st.lastResult, st.lastException);
         return;
     }
     if (id == MANIPULATOR_ID) {
-        rs485ProbeManagedDevice(id, DEVICE_KIND_MANIPULATOR);
+        rs485ProbeManagedDevice(id, DEVICE_KIND_MANIPULATOR, "scan");
+        scanDiagFinish(id, st.lastResult, st.lastException);
         return;
     }
 
@@ -1239,7 +2136,6 @@ void rs485ScanProbeId(uint8_t id)
         &exceptionCode,
         false);
 
-    Rs485DeviceState &st = g_rs485Devices[id];
     const uint32_t now = millis();
     st.lastProbeMs = now;
     st.lastResult = r;
@@ -1247,6 +2143,7 @@ void rs485ScanProbeId(uint8_t id)
 
     if (isMbAliveResult(r)) {
         rs485MarkDeviceAlive(st, r, exceptionCode);
+        scanDiagFinish(id, st.lastResult, st.lastException);
         return;
     }
 
@@ -1254,11 +2151,22 @@ void rs485ScanProbeId(uint8_t id)
     if (!st.everSeen || (uint32_t)(now - st.lastSeenMs) > RS485_SCAN_STALE_MS) {
         rs485MarkDeviceOffline(st);
     }
+
+    scanDiagFinish(id, st.lastResult, st.lastException);
 }
 
 void rs485ScanLoop()
 {
+    const uint32_t now = millis();
+
     if (!g_rs485ScanEnabled) {
+        if ((uint32_t)(now - g_rs485ScanLastStepMs) < RS485_SCAN_STEP_INTERVAL_MS) {
+            return;
+        }
+        g_rs485ScanLastStepMs = now;
+
+        rs485ScanProbeId(CONVEYOR_ID, "core_poll");
+        rs485ScanProbeId(MANIPULATOR_ID, "core_poll");
         return;
     }
 
@@ -1268,14 +2176,13 @@ void rs485ScanLoop()
         return;
     }
 
-    const uint32_t now = millis();
     if ((uint32_t)(now - g_rs485ScanLastStepMs) < RS485_SCAN_STEP_INTERVAL_MS) {
         return;
     }
     g_rs485ScanLastStepMs = now;
 
     for (uint8_t id = g_rs485ScanMinId; id <= g_rs485ScanMaxId; id++) {
-        rs485ScanProbeId(id);
+        rs485ScanProbeId(id, "loop");
     }
 
     for (uint8_t id = g_rs485ScanMinId; id <= g_rs485ScanMaxId; id++) {
@@ -1300,6 +2207,15 @@ void rs485ScanPrintStatus()
     const String onlineIds = rs485OnlineIdsCsv();
     Serial.print("MBSCAN online IDs: ");
     Serial.println(onlineIds.isEmpty() ? "<none>" : onlineIds);
+    if (g_rs485ScanEnabled) {
+        Serial.println("MBSCAN scope: periodic background sweep over configured range.");
+    } else {
+        Serial.print("MBSCAN scope: background sweep OFF; core poll keeps 12/13 refreshed every ");
+        Serial.print(RS485_SCAN_STEP_INTERVAL_MS);
+        Serial.println(" ms.");
+    }
+    Serial.println("MBSCAN note: direct I2C commands to 12/13 are always enabled.");
+    printScanDiagStatusLine();
 
     const Rs485DeviceState &vfd = g_rs485Devices[VFD_ID];
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
@@ -1325,6 +2241,12 @@ void rs485ScanPrintStatus()
     Serial.print(conveyorFlagState(conveyor));
     Serial.print(", motion=");
     Serial.print(conveyorMotionState(conveyor));
+    Serial.print(", vfd_timed_run=");
+    Serial.print(conveyorVfdTimedRunActive(conveyor) ? "yes" : "no");
+    Serial.print(", feed_strict=");
+    Serial.print(conveyorFeedSideEmptyStrict(conveyor) ? "yes" : "no");
+    Serial.print(", feed_valid=");
+    Serial.print(conveyorFeedSideEmptyValid(conveyor) ? "yes" : "no");
     Serial.print(", vfd_tick_ms=");
     Serial.println(conveyorVfdTickDurationMs(conveyor));
 
@@ -1715,11 +2637,14 @@ String mqttBuildStatusPayload()
     payload += ",\"rs485_scan_max\":" + String(g_rs485ScanMaxId);
     payload += ",\"rs485_online\":" + String(rs485OnlineCount());
     payload += ",\"rs485_online_ids\":\"" + escapeJsonString(rs485OnlineIdsCsv()) + "\"";
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
     payload += ",\"seal\":{";
-    payload += "\"start_pin\":" + String(PIN_SEAL_START);
-    payload += ",\"done_pin\":" + String(PIN_SEAL_DONE);
-    payload += ",\"start_out\":" + String(g_sealStartOutputActive ? "true" : "false");
-    payload += ",\"done\":" + String(sealIsDoneActive() ? "true" : "false");
+    payload += "\"owner\":\"conveyor\"";
+    payload += ",\"online\":" + String(conveyor.online && conveyor.protocolOk ? "true" : "false");
+    payload += ",\"start_out\":" + String(conveyorSealerStartPulseActive(conveyor) ? "true" : "false");
+    payload += ",\"done\":" + String(conveyorSealerDoneActive(conveyor) ? "true" : "false");
+    payload += ",\"busy\":" + String(conveyorSealerBusy(conveyor) ? "true" : "false");
+    payload += ",\"completion_seq\":" + String(conveyorSealerCompletionSeq(conveyor));
     payload += ",\"pulse_ms\":" + String(g_sealStartPulseDurationMs);
     payload += "}";
     payload += ",\"otvod_cycle\":{";
@@ -1750,7 +2675,6 @@ String mqttBuildStatusPayload()
     }
     payload += "]";
     const Rs485DeviceState &vfd = g_rs485Devices[VFD_ID];
-    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
     const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
     payload += ",\"devices\":{";
     payload += "\"vfd\":{";
@@ -1768,10 +2692,13 @@ String mqttBuildStatusPayload()
     payload += ",\"error_word\":" + String(conveyor.errorWord);
     payload += ",\"flag_state\":" + String(conveyorFlagState(conveyor));
     payload += ",\"motion_state\":" + String(conveyorMotionState(conveyor));
+    payload += ",\"vfd_timed_run_active\":" + String(conveyorVfdTimedRunActive(conveyor) ? "true" : "false");
     payload += ",\"program_state\":" + String(conveyorProgramStateCode(conveyor));
     payload += ",\"program_pass\":" + String(conveyorProgramPass(conveyor));
     payload += ",\"batch_ready\":" + String(conveyorBatchReady(conveyor) ? "true" : "false");
     payload += ",\"batch_seq\":" + String(conveyorBatchSeq(conveyor));
+    payload += ",\"feed_side_empty_strict\":" + String(conveyorFeedSideEmptyStrict(conveyor) ? "true" : "false");
+    payload += ",\"feed_side_empty_valid\":" + String(conveyorFeedSideEmptyValid(conveyor) ? "true" : "false");
     payload += ",\"vfd_tick_ms\":" + String(conveyorVfdTickDurationMs(conveyor));
     payload += "},";
     payload += "\"manipulator\":{";
@@ -1785,16 +2712,19 @@ String mqttBuildStatusPayload()
     payload += ",\"sensor_bits\":" + String(manipulatorSensorBits(manipulator));
     payload += ",\"conflict_bits\":" + String(manipulatorConflictBits(manipulator));
     payload += ",\"work_step\":" + String(manipulatorWorkStep(manipulator));
+    payload += ",\"step3_ready\":" + String(manipulatorStep3Ready(manipulator) ? "true" : "false");
     payload += ",\"step7_ready\":" + String(manipulatorStep7Ready(manipulator) ? "true" : "false");
     payload += "}";
     payload += "}";
     payload += ",\"common_cycle\":{";
     payload += "\"active\":" + String(g_commonCycle.active ? "true" : "false");
     payload += ",\"pause\":" + String(g_commonCycle.pauseRequested ? "true" : "false");
+    payload += ",\"pause_state\":\"" + String(commonPauseStateName(g_commonCycle.pauseState)) + "\"";
     payload += ",\"stage\":\"" + String(commonCycleStageName(g_commonCycle.stage)) + "\"";
     payload += ",\"manip_starts\":" + String(g_commonCycle.manipStarts);
     payload += ",\"parallel_starts\":" + String(g_commonCycle.parallelStarts);
     payload += ",\"batch_seq\":" + String(g_commonCycle.lastConsumedBatchSeq);
+    payload += ",\"sealer_done_pending_unload\":" + String(g_commonCycle.sealerDonePendingUnload ? "true" : "false");
     payload += ",\"last\":\"" + escapeJsonString(g_commonCycle.lastEvent) + "\"";
     payload += "}";
     payload += ",\"cmd_seq\":" + String(g_mqttCmdSeq);
@@ -2100,7 +3030,7 @@ void printHelp()
     Serial.println("  MBR <reg> [cnt]   - read VFD holding regs (func 03)");
     Serial.println("  MBRAW <reg> [cnt] - raw Modbus hex dump using current id/UART");
     Serial.println("  MBW <reg> <val>   - write VFD single reg (func 06)");
-    Serial.println("  MBSCAN <...>      - scan VFD via RS485 and 12/13 via I2C");
+    Serial.println("  MBSCAN <...>      - background sweep; 12/13 mandatory poll stays for runtime");
     Serial.println("  VFD <...>         - VFD quick commands (VFD HELP)");
     Serial.println("  WIFI <...>        - WiFi setup/status (WIFI HELP)");
     Serial.println("  MQTT <...>        - MQTT setup/status (MQTT HELP)");
@@ -2136,6 +3066,7 @@ void printState()
     Serial.print(", ids=");
     const String onlineIds = rs485OnlineIdsCsv();
     Serial.println(onlineIds.isEmpty() ? "<none>" : onlineIds);
+    printScanDiagStatusLine();
 
     const Rs485DeviceState &vfd = g_rs485Devices[VFD_ID];
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
@@ -2161,6 +3092,8 @@ void printState()
     Serial.print(conveyorFlagState(conveyor));
     Serial.print(", motion=");
     Serial.print(conveyorMotionState(conveyor));
+    Serial.print(", vfd_timed_run=");
+    Serial.print(conveyorVfdTimedRunActive(conveyor) ? "yes" : "no");
     Serial.print(", vfd_tick_ms=");
     Serial.println(conveyorVfdTickDurationMs(conveyor));
 
@@ -2193,6 +3126,46 @@ void printState()
     Serial.print(g_mqttHost.isEmpty() ? "<empty>" : g_mqttHost);
     Serial.print(", port=");
     Serial.println(g_mqttPort);
+
+    const uint32_t now = millis();
+    Serial.print("Loop diag: stage=");
+    Serial.print(g_loopDiag.currentStage);
+    Serial.print(", stage_ms=");
+    Serial.print(static_cast<uint32_t>(now - g_loopDiag.currentStageSinceMs));
+    Serial.print(", tick_seq=");
+    Serial.print(g_loopDiag.tickSeq);
+    Serial.print(", tick_max_ms=");
+    Serial.println(g_loopDiag.maxTickDurationMs);
+
+    Serial.print("I2C diag: active=");
+    Serial.print(g_i2cDiag.active ? "yes" : "no");
+    Serial.print(", active_op=");
+    Serial.print(g_i2cDiag.activeOp);
+    Serial.print(", active_origin=");
+    Serial.print(g_i2cDiag.activeOrigin);
+    Serial.print(", active_id=");
+    Serial.print(g_i2cDiag.activeId);
+    Serial.print(", active_ms=");
+    Serial.print(g_i2cDiag.active ? static_cast<uint32_t>(now - g_i2cDiag.activeStartedMs) : 0U);
+    Serial.print(", last_op=");
+    Serial.print(g_i2cDiag.lastOp);
+    Serial.print(", last_origin=");
+    Serial.print(g_i2cDiag.lastOrigin);
+    Serial.print(", last_outcome=");
+    Serial.print(g_i2cDiag.lastOutcome);
+    Serial.print(", last_ms=");
+    Serial.print(g_i2cDiag.lastDurationMs);
+    Serial.print(", max_ms=");
+    Serial.print(g_i2cDiag.maxDurationMs);
+    Serial.print(", fails=");
+    Serial.print(g_i2cDiag.failCount);
+    Serial.print(", slow=");
+    Serial.print(g_i2cDiag.slowCount);
+    Serial.print(", guard=");
+    Serial.print(g_i2cDiag.guardTripCount);
+    Serial.print(", unfinished=");
+    Serial.print(g_i2cDiag.active ? "yes" : "no");
+    Serial.println();
 }
 
 void handleCommandMbId(String args)
@@ -2308,6 +3281,7 @@ void handleCommandMbScan(String args)
         Serial.println("  MBSCAN OFF");
         Serial.println("  MBSCAN RANGE <min_id> <max_id>");
         Serial.println("  MBSCAN NOW [id]");
+        Serial.println("  OFF disables only background sweep; mandatory poll for 12/13 stays active.");
         return;
     }
 
@@ -2318,14 +3292,18 @@ void handleCommandMbScan(String args)
 
     if (sub == "ON") {
         g_rs485ScanEnabled = true;
-        Serial.println("MBSCAN: enabled.");
+        g_rs485ScanLastStepMs = 0;
+        Serial.println("MBSCAN: enabled (background periodic sweep over selected range).");
         rs485ScanPrintStatus();
         return;
     }
 
     if (sub == "OFF") {
         g_rs485ScanEnabled = false;
-        Serial.println("MBSCAN: disabled.");
+        g_rs485ScanLastStepMs = 0;
+        rs485ScanProbeId(CONVEYOR_ID, "core_poll");
+        rs485ScanProbeId(MANIPULATOR_ID, "core_poll");
+        Serial.println("MBSCAN: background sweep disabled; mandatory poll for 12/13 remains active.");
         rs485ScanPrintStatus();
         return;
     }
@@ -2367,7 +3345,7 @@ void handleCommandMbScan(String args)
             return;
         }
 
-        rs485ScanProbeId(static_cast<uint8_t>(id));
+        rs485ScanProbeId(static_cast<uint8_t>(id), "manual_now");
         const Rs485DeviceState &st = g_rs485Devices[id];
         Serial.print("MBSCAN NOW: id=");
         Serial.print(id);
@@ -2469,7 +3447,7 @@ uint32_t computeOtvodStepToVfdDelayMs(uint32_t steps)
 
 bool pollOtvodConveyorState()
 {
-    rs485ProbeManagedDevice(CONVEYOR_ID, DEVICE_KIND_CONVEYOR);
+    rs485ProbeManagedDevice(CONVEYOR_ID, DEVICE_KIND_CONVEYOR, "otvod_poll");
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
     return conveyor.online && conveyor.protocolOk;
 }
@@ -2485,14 +3463,14 @@ bool pollOtvodStep2State(bool &step2ActiveOut)
     return true;
 }
 
-bool pollOtvodVfdCycleState(bool &busyOut, uint32_t &tickDurationMsOut)
+bool pollOtvodVfdCycleState(bool &vfdTimedRunActiveOut, uint32_t &tickDurationMsOut)
 {
     if (!pollOtvodConveyorState()) {
         return false;
     }
 
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
-    busyOut = deviceStatusBusy(conveyor);
+    vfdTimedRunActiveOut = conveyorVfdTimedRunActive(conveyor);
     tickDurationMsOut = conveyorVfdTickDurationMs(conveyor);
     return true;
 }
@@ -2501,9 +3479,9 @@ void printOtvodWorkCycleStatus()
 {
     uint32_t tickDurationMs = g_otvodWorkCycle.vfdDoneDelayMs;
     if (!g_otvodWorkCycle.active && tickDurationMs == 0) {
-        bool conveyorBusy = false;
+        bool vfdTimedRunActive = false;
         uint32_t polledTickMs = 0;
-        if (pollOtvodVfdCycleState(conveyorBusy, polledTickMs) && polledTickMs > 0) {
+        if (pollOtvodVfdCycleState(vfdTimedRunActive, polledTickMs) && polledTickMs > 0) {
             tickDurationMs = polledTickMs;
         }
     }
@@ -2533,7 +3511,7 @@ void printOtvodWorkCycleStatus()
 bool sendOtvodWorkStepCommand(uint8_t cycleIndex, uint32_t startedMs)
 {
     const String command = "OTVOD " + String(g_otvodWorkCycle.stepCommandSteps);
-    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, command)) {
+    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, command, "otvod_step2_start")) {
         Serial.println("OTCYCLE: failed to send OTVOD command to conveyor.");
         return false;
     }
@@ -2542,6 +3520,7 @@ bool sendOtvodWorkStepCommand(uint8_t cycleIndex, uint32_t startedMs)
     g_otvodWorkCycle.stepObservedActive = false;
     g_otvodWorkCycle.stepRunsStarted = cycleIndex;
     g_otvodWorkCycle.stepCompletionSeqBase = conveyorStep2CompletionSeq(g_rs485Devices[CONVEYOR_ID]);
+    g_otvodWorkCycle.vfdStartRetryCount = 0;
     g_otvodWorkCycle.stepStartedMs = startedMs;
     g_otvodWorkCycle.stepCompletedMs = 0;
     g_otvodWorkCycle.lastPollMs = 0;
@@ -2561,8 +3540,8 @@ bool startOtvodWorkVfdRun(uint8_t cycleIndex)
 {
     uint32_t tickDurationMs = conveyorVfdTickDurationMs(g_rs485Devices[CONVEYOR_ID]);
     if (tickDurationMs == 0) {
-        bool conveyorBusy = false;
-        if (!pollOtvodVfdCycleState(conveyorBusy, tickDurationMs)) {
+        bool vfdTimedRunActive = false;
+        if (!pollOtvodVfdCycleState(vfdTimedRunActive, tickDurationMs)) {
             Serial.println("OTCYCLE: failed to read conveyor VFDTICK state.");
             return false;
         }
@@ -2573,7 +3552,7 @@ bool startOtvodWorkVfdRun(uint8_t cycleIndex)
         return false;
     }
 
-    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "VFDTICK RUN")) {
+    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "VFDTICK RUN", "otvod_vfdtick_run")) {
         Serial.println("OTCYCLE: failed to send VFDTICK RUN to conveyor.");
         return false;
     }
@@ -2601,9 +3580,9 @@ bool startOtvodWorkVfdRun(uint8_t cycleIndex)
 void stopOtvodWorkCycleOutputs()
 {
     if (g_otvodWorkCycle.vfdRunning) {
-        (void)i2cSendManagedDeviceCommand(CONVEYOR_ID, "VFDSTOP");
+        (void)i2cSendManagedDeviceCommand(CONVEYOR_ID, "VFDSTOP", "otvod_stop_vfd");
     }
-    (void)i2cSendManagedDeviceCommand(CONVEYOR_ID, "STEP2STOP");
+    (void)i2cSendManagedDeviceCommand(CONVEYOR_ID, "STEP2STOP", "otvod_stop_step2");
 }
 
 void finishOtvodWorkCycle(const String &result)
@@ -2647,8 +3626,8 @@ bool startOtvodWorkCycle(uint8_t totalCycles, uint32_t stepSteps, float legacyVf
 
     uint32_t vfdDoneDelayMs = conveyorVfdTickDurationMs(g_rs485Devices[CONVEYOR_ID]);
     if (vfdDoneDelayMs == 0) {
-        bool conveyorBusy = false;
-        if (!pollOtvodVfdCycleState(conveyorBusy, vfdDoneDelayMs)) {
+        bool vfdTimedRunActive = false;
+        if (!pollOtvodVfdCycleState(vfdTimedRunActive, vfdDoneDelayMs)) {
             g_lastCommandResult = "OTCYCLE failed: conveyor offline";
             Serial.println(g_lastCommandResult);
             return false;
@@ -2875,13 +3854,13 @@ void processOtvodWorkCycleStrict()
         if ((uint32_t)(nowMs - g_otvodWorkCycle.lastPollMs) >= OTVOD_WORK_VFD_POLL_MS) {
             g_otvodWorkCycle.lastPollMs = nowMs;
 
-            bool conveyorBusy = false;
+            bool vfdTimedRunActive = false;
             uint32_t tickDurationMs = 0;
-            if (pollOtvodVfdCycleState(conveyorBusy, tickDurationMs)) {
+            if (pollOtvodVfdCycleState(vfdTimedRunActive, tickDurationMs)) {
                 if (tickDurationMs > 0) {
                     g_otvodWorkCycle.vfdDoneDelayMs = tickDurationMs;
                 }
-                if (conveyorBusy) {
+                if (vfdTimedRunActive) {
                     g_otvodWorkCycle.vfdObservedBusy = true;
                 } else if (g_otvodWorkCycle.vfdObservedBusy) {
                     g_otvodWorkCycle.vfdRunning = false;
@@ -2898,6 +3877,18 @@ void processOtvodWorkCycleStrict()
         }
 
         if (!g_otvodWorkCycle.vfdObservedBusy && elapsedMs > OTVOD_WORK_VFD_START_TIMEOUT_MS) {
+            if (g_otvodWorkCycle.vfdStartRetryCount < OTVOD_WORK_VFD_START_RETRY_MAX) {
+                g_otvodWorkCycle.vfdStartRetryCount++;
+                Serial.print("OTCYCLE: VFDTICK start retry ");
+                Serial.print(g_otvodWorkCycle.vfdStartRetryCount);
+                Serial.print("/");
+                Serial.println(OTVOD_WORK_VFD_START_RETRY_MAX);
+                if (!startOtvodWorkVfdRun(g_otvodWorkCycle.stepRunsStarted)) {
+                    abortOtvodWorkCycle("OTCYCLE failed: VFDTICK retry start", true);
+                    return;
+                }
+                return;
+            }
             abortOtvodWorkCycle("OTCYCLE failed: VFDTICK start timeout", true);
             return;
         }
@@ -3201,7 +4192,7 @@ void findVfdOnCommonUartSettings()
             g_modbusSlaveId = probe.slaveId;
             rs485ScanResetAll();
             if (probe.slaveId == VFD_ID) {
-                rs485ScanProbeId(VFD_ID);
+                rs485ScanProbeId(VFD_ID, "vfd_find");
             }
             Serial.print("VFD FIND: selected ");
             Serial.print("id=");
@@ -3892,10 +4883,12 @@ void printBanner()
     Serial.print(PIN_I2C_SDA);
     Serial.print(", SCL=");
     Serial.println(PIN_I2C_SCL);
-    Serial.print("SEAL: START=");
-    Serial.print(PIN_SEAL_START);
-    Serial.print(", DONE=");
-    Serial.println(PIN_SEAL_DONE);
+    Serial.print("I2C timeout ms: ");
+    Serial.println(I2C_TIMEOUT_MS);
+    Serial.print("I2C wire trace sample: every ");
+    Serial.print(I2C_WIRE_TRACE_SAMPLE_EVERY);
+    Serial.println(" ops (+forced on anomalies).");
+    Serial.println("SEAL: owner=conveyor(12) via I2C managed commands/status.");
     Serial.print("MODBUS default slave id: ");
     Serial.println(g_modbusSlaveId);
     Serial.print("MBSCAN: ");
@@ -3904,6 +4897,9 @@ void printBanner()
     Serial.print(g_rs485ScanMinId);
     Serial.print("..");
     Serial.println(g_rs485ScanMaxId);
+    Serial.print("MBSCAN OFF keeps mandatory poll for 12/13 every ");
+    Serial.print(RS485_SCAN_STEP_INTERVAL_MS);
+    Serial.println(" ms.");
     wifiPrintStatus();
     mqttPrintStatus();
     printHelp();
@@ -3915,6 +4911,8 @@ void setup()
 {
     Serial.begin(SERIAL_BAUD);
     delay(300);
+    g_loopDiag.currentStage = "setup";
+    g_loopDiag.currentStageSinceMs = millis();
 
     WiFi.mode(WIFI_STA);
     if (!wifiTryAutoConnect(true)) {
@@ -3931,26 +4929,53 @@ void setup()
     pinMode(PIN_RS485_DE_RE, OUTPUT);
     rs485SetReceiveMode();
     rs485ApplyUart(RS485_BAUD, SERIAL_8E1);
-    pinMode(PIN_SEAL_START, OUTPUT);
-    sealWriteStartOutput(false);
-    pinMode(PIN_SEAL_DONE, INPUT_PULLUP);
-    g_sealDoneLastActive = sealIsDoneActive();
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_CLOCK_HZ);
+    Wire.setTimeOut(I2C_TIMEOUT_MS);
     rs485ScanResetAll();
 
     printBanner();
+    loopMarkStage("idle");
 }
 
 void loop()
 {
+    const uint32_t tickStartedMs = millis();
+    g_loopDiag.tickSeq++;
+    g_loopDiag.lastTickStartedMs = tickStartedMs;
+
+    loopMarkStage("console");
+    loopPrintHeartbeat();
     processConsole();
+    loopMarkStage("scan");
+    loopPrintHeartbeat();
     rs485ScanLoop();
+    loopMarkStage("mqtt");
+    loopPrintHeartbeat();
     mqttLoop();
+    loopMarkStage("seal");
+    loopPrintHeartbeat();
     processSealIo();
+    loopMarkStage("otvod");
+    loopPrintHeartbeat();
     processOtvodWorkCycleStrict();
+    loopMarkStage("common");
+    loopPrintHeartbeat();
     processCommonCycle();
+    loopMarkStage("rs485_diag");
+    loopPrintHeartbeat();
     processRs485DiagPassive();
     if (RS485_TEXT_SNIFFER_ENABLED) {
+        loopMarkStage("rs485_sniffer");
+        loopPrintHeartbeat();
         processRs485RxText();
+    }
+    i2cCheckActiveGuard();
+    loopPrintHeartbeat();
+    loopMarkStage("idle");
+
+    const uint32_t tickDurationMs = static_cast<uint32_t>(millis() - tickStartedMs);
+    g_loopDiag.lastTickCompletedMs = millis();
+    if (tickDurationMs > g_loopDiag.maxTickDurationMs) {
+        g_loopDiag.maxTickDurationMs = tickDurationMs;
     }
 }

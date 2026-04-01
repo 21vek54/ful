@@ -56,6 +56,54 @@ bool cliIsConveyorBusy()
     return app::isConveyorBusy(app::readConveyorStatusSnapshot());
 }
 
+void manualStartConstantMotion(uint32_t steps, uint32_t delayUs)
+{
+    app::invalidateConveyorFeedSideModel("manual D move");
+    startConstantMotion(steps, delayUs);
+}
+
+void manualStartPositionalProfiledMotion(uint32_t stepsTotal, uint32_t nominalDelayUs)
+{
+    app::invalidateConveyorFeedSideModel("manual P move");
+    startPositionalProfiledMotion(stepsTotal, nominalDelayUs);
+}
+
+void manualStartCycle2()
+{
+    app::invalidateConveyorFeedSideModel("manual C2 start");
+    startCycle2();
+}
+
+void manualShiftCalibrateTravel()
+{
+    app::invalidateConveyorFeedSideModel("manual CZ calibration");
+    shiftCalibrateTravel();
+}
+
+void manualShiftRunMoveCommandC()
+{
+    app::invalidateConveyorFeedSideModel("manual shift C");
+    shiftRunMoveCommandC();
+}
+
+void manualShiftRunMoveCommandZ()
+{
+    app::invalidateConveyorFeedSideModel("manual shift Z");
+    shiftRunMoveCommandZ();
+}
+
+void manualStartMainContinuousMotion(uint32_t delayUs)
+{
+    app::invalidateConveyorFeedSideModel("manual MAINSTART");
+    startMainContinuousMotion(delayUs);
+}
+
+void manualStartPositionalContinuousMotion(uint32_t delayUs)
+{
+    app::invalidateConveyorFeedSideModel("manual POSSTART");
+    startPositionalContinuousMotion(delayUs);
+}
+
 void manualSetFlagUp()
 {
     digitalWrite(PIN_FLAG, core::hw_config::FLAG_UP_LEVEL);
@@ -126,19 +174,120 @@ void saveVfdTickSetting()
     Serial.println(" сек.");
 }
 
+const char *sealerRunStateToText(groups::sealer::SealerRunState state)
+{
+    switch (state) {
+        case groups::sealer::SealerRunState::Idle:
+            return "idle";
+        case groups::sealer::SealerRunState::StartPulseActive:
+            return "start_pulse";
+        case groups::sealer::SealerRunState::WaitDone:
+            return "wait_done";
+    }
+    return "unknown";
+}
+
+const char *sealerLastCompletionToText(const groups::sealer::SealerStatus &status)
+{
+    if (status.completionSeq == 0U) {
+        return "none";
+    }
+    return status.lastCompletionSynthetic ? "synthetic" : "physical";
+}
+
+const char *sealerWaitDoneBlockReasonToText(groups::sealer::SealerWaitDoneBlockReason reason)
+{
+    switch (reason) {
+        case groups::sealer::SealerWaitDoneBlockReason::None:
+            return "none";
+        case groups::sealer::SealerWaitDoneBlockReason::NotWaitingDone:
+            return "not_waiting_done";
+        case groups::sealer::SealerWaitDoneBlockReason::WaitingDoneSignalInactive:
+            return "waiting_done_inactive";
+        case groups::sealer::SealerWaitDoneBlockReason::WaitingDoneSyntheticPending:
+            return "waiting_done_synth_pending";
+        case groups::sealer::SealerWaitDoneBlockReason::WaitingDoneSignalAlreadyActiveNoEdge:
+            return "waiting_done_active_no_new_edge";
+    }
+    return "unknown";
+}
+
+const char *logicLevelToText(bool levelHigh)
+{
+    return levelHigh ? "HIGH" : "LOW";
+}
+
 void printSealStatus()
 {
     const groups::sealer::SealerStatus sealerStatus = groups::sealer::readSealerStatus();
-    Serial.print("SEAL: start_out=");
+    Serial.print("SEAL: run_state=");
+    Serial.print(sealerRunStateToText(sealerStatus.runState));
+    Serial.print(", start_out=");
     Serial.print(sealerStatus.startOutputActive ? "on" : "off");
     Serial.print(", done=");
     Serial.print(sealerStatus.doneInputActive ? "active" : "inactive");
+    Serial.print(", done_raw=");
+    Serial.print(sealerStatus.doneRawInputActive ? "active" : "inactive");
+    Serial.print(", done_filtered=");
+    Serial.print(sealerStatus.doneFilteredInputActive ? "active" : "inactive");
+    Serial.print(", done_pin_level=");
+    Serial.print(logicLevelToText(sealerStatus.donePinLevelHigh));
+    Serial.print(", done_active_level=");
+    Serial.print(sealerStatus.doneActiveLevelLow ? "LOW" : "HIGH");
+    Serial.print(", done_filter_ms=");
+    Serial.print(sealerStatus.doneFilterDebounceMs);
+    Serial.print(", pulse_ms=");
+    Serial.print(sealerStatus.startPulseDurationMs);
+    Serial.print(", wait_done=");
+    Serial.print(sealerStatus.waitDoneActive ? "yes" : "no");
+    Serial.print(", wait_age_ms=");
+    Serial.print(sealerStatus.waitDoneAgeMs);
+    Serial.print(", wait_hb_seq=");
+    Serial.print(sealerStatus.waitDoneHeartbeatSeq);
+    Serial.print(", completion_blocked=");
+    Serial.print(sealerStatus.completionBlocked ? "yes" : "no");
+    Serial.print(", block_reason=");
+    Serial.print(sealerWaitDoneBlockReasonToText(sealerStatus.waitDoneBlockReason));
+    Serial.print(", completion_seq=");
+    Serial.print(sealerStatus.completionSeq);
+    Serial.print(", last_completion=");
+    Serial.print(sealerLastCompletionToText(sealerStatus));
+    Serial.print(", last_completion_ms=");
+    Serial.print(sealerStatus.lastCompletionMs);
+    Serial.print(", edges_raw=");
+    Serial.print(sealerStatus.doneRawRiseCount);
+    Serial.print("/");
+    Serial.print(sealerStatus.doneRawFallCount);
+    Serial.print(", edges_effective=");
+    Serial.print(sealerStatus.doneEffectiveRiseCount);
+    Serial.print("/");
+    Serial.print(sealerStatus.doneEffectiveFallCount);
+    Serial.print(", raw_last_rise_ms=");
+    Serial.print(sealerStatus.doneRawLastRiseMs);
+    Serial.print(", raw_last_fall_ms=");
+    Serial.print(sealerStatus.doneRawLastFallMs);
+    Serial.print(", eff_last_rise_ms=");
+    Serial.print(sealerStatus.doneEffectiveLastRiseMs);
+    Serial.print(", eff_last_fall_ms=");
+    Serial.print(sealerStatus.doneEffectiveLastFallMs);
+    Serial.print(", ignored_rise_outside_wait=");
+    Serial.print(sealerStatus.ignoredRiseOutsideWaitDoneCount);
+    Serial.print(", ignored_last_ms=");
+    Serial.print(sealerStatus.ignoredRiseOutsideWaitDoneLastMs);
+    Serial.print(", emu_pending=");
+    Serial.print(sealerStatus.doneSyntheticPending ? "yes" : "no");
+    Serial.print(", emu_hold=");
+    Serial.print(sealerStatus.doneSyntheticHoldActive ? "yes" : "no");
+    Serial.print(", emu_remaining_ms=");
+    Serial.print(sealerStatus.doneSyntheticRemainingMs);
+    Serial.print(", emu_delay_ms=");
+    Serial.print(sealerStatus.doneSyntheticDelayMs);
+    Serial.print(", emu_hold_ms=");
+    Serial.print(sealerStatus.doneSyntheticHoldMs);
     Serial.print(", start_pin=");
     Serial.print(PIN_RELAY_2);
     Serial.print(", done_pin=");
-    Serial.print(PIN_SENSOR_EXT_1);
-    Serial.print(", pulse_ms=");
-    Serial.println(sealerStatus.startPulseDurationMs);
+    Serial.println(PIN_SENSOR_EXT_1);
 }
 
 void printSealStartPulseStarted(uint32_t pulseMs)
@@ -220,6 +369,11 @@ void shiftHookProcessPositionalMotion()
     processPositionalMotion();
 }
 
+void shiftHookProcessI2cBus()
+{
+    comm::processI2cBus();
+}
+
 bool shiftHookIsMotionActive()
 {
     return motionMainIsActive();
@@ -274,16 +428,16 @@ void registerManualRuntimeCallbacks()
     callbacks.printSealStartPulseStarted = printSealStartPulseStarted;
     callbacks.printVfdTickSetting = printVfdTickSetting;
     callbacks.saveVfdTickSetting = saveVfdTickSetting;
-    callbacks.startConstantMotion = startConstantMotion;
-    callbacks.startPositionalProfiledMotion = startPositionalProfiledMotion;
+    callbacks.startConstantMotion = manualStartConstantMotion;
+    callbacks.startPositionalProfiledMotion = manualStartPositionalProfiledMotion;
     callbacks.startProgram1 = startProgram1;
-    callbacks.startCycle2 = startCycle2;
-    callbacks.shiftCalibrateTravel = shiftCalibrateTravel;
-    callbacks.shiftRunMoveCommandC = shiftRunMoveCommandC;
-    callbacks.shiftRunMoveCommandZ = shiftRunMoveCommandZ;
-    callbacks.startMainContinuousMotion = startMainContinuousMotion;
+    callbacks.startCycle2 = manualStartCycle2;
+    callbacks.shiftCalibrateTravel = manualShiftCalibrateTravel;
+    callbacks.shiftRunMoveCommandC = manualShiftRunMoveCommandC;
+    callbacks.shiftRunMoveCommandZ = manualShiftRunMoveCommandZ;
+    callbacks.startMainContinuousMotion = manualStartMainContinuousMotion;
     callbacks.stopMotion = stopMotion;
-    callbacks.startPositionalContinuousMotion = startPositionalContinuousMotion;
+    callbacks.startPositionalContinuousMotion = manualStartPositionalContinuousMotion;
     callbacks.stopPositionalMotion = stopPositionalMotion;
     callbacks.setFlagUp = manualSetFlagUp;
     callbacks.setFlagDown = manualSetFlagDown;

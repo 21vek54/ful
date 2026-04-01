@@ -22,7 +22,9 @@ bool startWorkCycle(bool fromRecovery = false);
 // Функция проверки, выполняется ли рабочий цикл
 bool isWorkCycleInProgress();
 uint8_t getWorkCycleCurrentStep();
+bool isWorkCycleStep3Reached();
 bool isWorkCycleStep7Reached();
+void resetWorkCycleReadyLatches();
 
 // Функция восстановления рабочего цикла после сбоя
 bool recoverWorkCycle();

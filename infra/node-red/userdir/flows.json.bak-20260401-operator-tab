@@ -1,0 +1,514 @@
+﻿[
+    {
+        "id":  "tab_master_com12_minimal",
+        "type":  "tab",
+        "label":  "Оператор: мастер COM12",
+        "disabled":  false,
+        "info":  "Операторский экран master_com12. Источники: status и online."
+    },
+    {
+        "id":  "comment_master_com12_minimal",
+        "type":  "comment",
+        "z":  "tab_master_com12_minimal",
+        "name":  "MQTT-топики",
+        "info":  "fyl/master_com12/status\nfyl/master_com12/online",
+        "x":  140,
+        "y":  60,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_in_master_status_minimal",
+        "type":  "mqtt in",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Статус master",
+        "topic":  "fyl/master_com12/status",
+        "qos":  "0",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884_minimal",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  140,
+        "y":  140,
+        "wires":  [
+                      [
+                          "debug_status_raw_minimal",
+                          "func_parse_status_minimal"
+                      ]
+                  ]
+    },
+    {
+        "id":  "func_parse_status_minimal",
+        "type":  "function",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Разбор status",
+        "func":  "let payload = msg.payload;\nif (typeof payload === \"string\") {\n    try {\n        payload = JSON.parse(payload);\n    } catch (err) {\n        node.warn(\"Ошибка разбора status JSON: \" + err.message);\n        return null;\n    }\n}\n\nif (!payload || typeof payload !== \"object\") {\n    return null;\n}\n\nfunction normalizeBoard(value) {\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\") return \"online\";\n    if (text === \"offline\") return \"offline\";\n    return \"unknown\";\n}\n\nmsg.payload = {\n    wifi: !!payload.wifi,\n    mqtt: !!payload.mqtt,\n    board12: normalizeBoard(payload.board12),\n    board13: normalizeBoard(payload.board13),\n    receivedAt: new Date().toISOString()\n};\n\nreturn msg;",
+        "outputs":  1,
+        "timeout":  "",
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  400,
+        "y":  140,
+        "wires":  [
+                      [
+                          "debug_status_parsed_minimal",
+                          "func_operator_model_minimal"
+                      ]
+                  ]
+    },
+    {
+        "id":  "debug_status_raw_minimal",
+        "type":  "debug",
+        "z":  "tab_master_com12_minimal",
+        "name":  "status raw",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  true,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  390,
+        "y":  100,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_status_parsed_minimal",
+        "type":  "debug",
+        "z":  "tab_master_com12_minimal",
+        "name":  "status parsed boards",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  true,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  670,
+        "y":  140,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "mqtt_in_master_online_minimal",
+        "type":  "mqtt in",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Присутствие master",
+        "topic":  "fyl/master_com12/online",
+        "qos":  "0",
+        "datatype":  "auto-detect",
+        "broker":  "mqtt_broker_master1884_minimal",
+        "nl":  false,
+        "rap":  true,
+        "rh":  0,
+        "inputs":  0,
+        "x":  150,
+        "y":  240,
+        "wires":  [
+                      [
+                          "debug_online_raw_minimal",
+                          "func_parse_online_minimal"
+                      ]
+                  ]
+    },
+    {
+        "id":  "func_parse_online_minimal",
+        "type":  "function",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Разбор online",
+        "func":  "const rawValue = msg.payload;\nconst text = String(rawValue ?? \"\").trim().toLowerCase();\nmsg.payload = {\n    online: text === \"online\" || text === \"true\" || text === \"1\",\n    normalized: text,\n    raw: rawValue,\n    receivedAt: new Date().toISOString()\n};\nreturn msg;",
+        "outputs":  1,
+        "timeout":  "",
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  400,
+        "y":  240,
+        "wires":  [
+                      [
+                          "debug_online_parsed_minimal",
+                          "func_operator_model_minimal"
+                      ]
+                  ]
+    },
+    {
+        "id":  "debug_online_raw_minimal",
+        "type":  "debug",
+        "z":  "tab_master_com12_minimal",
+        "name":  "online raw",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  true,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  380,
+        "y":  200,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "debug_online_parsed_minimal",
+        "type":  "debug",
+        "z":  "tab_master_com12_minimal",
+        "name":  "online parsed",
+        "active":  true,
+        "tosidebar":  true,
+        "console":  true,
+        "tostatus":  false,
+        "complete":  "payload",
+        "targetType":  "msg",
+        "statusVal":  "",
+        "statusType":  "auto",
+        "x":  660,
+        "y":  240,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "comment_dashboard_master_com12_minimal",
+        "type":  "comment",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Ссылка dashboard",
+        "info":  "Операторская страница: /dashboard/master-com12",
+        "x":  160,
+        "y":  340,
+        "wires":  [
+
+                  ]
+    },
+    {
+        "id":  "inject_operator_init_minimal",
+        "type":  "inject",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Инициализация экрана",
+        "props":  [
+                      {
+                          "p":  "payload"
+                      },
+                      {
+                          "p":  "topic",
+                          "vt":  "str"
+                      }
+                  ],
+        "repeat":  "",
+        "crontab":  "",
+        "once":  true,
+        "onceDelay":  "0.5",
+        "topic":  "operator/init",
+        "payload":  "{}",
+        "payloadType":  "json",
+        "x":  160,
+        "y":  400,
+        "wires":  [
+                      [
+                          "func_operator_model_minimal"
+                      ]
+                  ]
+    },
+    {
+        "id":  "func_operator_model_minimal",
+        "type":  "function",
+        "z":  "tab_master_com12_minimal",
+        "name":  "Модель экрана",
+        "func":  "let state = flow.get(\"masterOperatorState\");\nif (!state) {\n    state = {\n        board12: \"unknown\",\n        board13: \"unknown\",\n        wifi: \"unknown\",\n        mqtt: \"unknown\",\n        masterOnline: \"unknown\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nfunction normalizeStatus(value) {\n    if (value === true) return \"online\";\n    if (value === false) return \"offline\";\n\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\" || text === \"1\" || text === \"true\") return \"online\";\n    if (text === \"offline\" || text === \"0\" || text === \"false\") return \"offline\";\n    return \"unknown\";\n}\n\nfunction describeStatus(kind, value, title, hint) {\n    const normalized = normalizeStatus(value);\n    let text = \"Нет данных\";\n\n    if (kind === \"master\") {\n        if (normalized === \"online\") text = \"На связи\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    } else if (kind === \"service\") {\n        if (normalized === \"online\") text = \"Подключено\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    } else {\n        if (normalized === \"online\") text = \"В сети\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    }\n\n    return {\n        key: normalized,\n        text,\n        title,\n        hint\n    };\n}\n\nconst payload = msg.payload;\nif (payload \u0026\u0026 typeof payload === \"object\") {\n    if (Object.prototype.hasOwnProperty.call(payload, \"board12\")) {\n        state.board12 = normalizeStatus(payload.board12);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"board13\")) {\n        state.board13 = normalizeStatus(payload.board13);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"wifi\")) {\n        state.wifi = normalizeStatus(payload.wifi);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"mqtt\")) {\n        state.mqtt = normalizeStatus(payload.mqtt);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"online\")) {\n        state.masterOnline = normalizeStatus(payload.online);\n    }\n}\n\nif (msg.topic !== \"operator/init\") {\n    state.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\n}\n\nflow.set(\"masterOperatorState\", state);\n\nconst model = {\n    title: \"Мастер COM12\",\n    subtitle: \"Минимальный транспортный контур через MQTT и I2C\",\n    master: describeStatus(\"master\", state.masterOnline, \"Мастер\", \"Текущее присутствие master_com12\"),\n    wifi: describeStatus(\"service\", state.wifi, \"Wi-Fi\", \"Связь платы с локальной сетью\"),\n    mqtt: describeStatus(\"service\", state.mqtt, \"MQTT\", \"Связь платы с брокером Mosquitto\"),\n    board12: describeStatus(\"board\", state.board12, \"Плата 12\", \"Статус платы 12 по опросу master\"),\n    board13: describeStatus(\"board\", state.board13, \"Плата 13\", \"Статус платы 13 по опросу master\"),\n    lastUpdate: state.lastUpdate,\n    topics: [\n        \"fyl/master_com12/status\",\n        \"fyl/master_com12/online\"\n    ],\n    note: \"Экран обновляется автоматически при новых сообщениях status и online. Если статусы замерли, сначала проверяй MQTT и последнее время обновления.\"\n};\n\nfunction makeMsg(payload) {\n    return { payload };\n}\n\nreturn [\n    makeMsg(model),\n    makeMsg(model),\n    makeMsg(model)\n];",
+        "outputs":  3,
+        "timeout":  "",
+        "noerr":  0,
+        "initialize":  "",
+        "finalize":  "",
+        "libs":  [
+
+                 ],
+        "x":  420,
+        "y":  400,
+        "wires":  [
+                      [
+                          "ui_template_summary_minimal"
+                      ],
+                      [
+                          "ui_template_boards_minimal"
+                      ],
+                      [
+                          "ui_template_diagnostics_minimal"
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_base_master_com12_minimal",
+        "type":  "ui-base",
+        "name":  "Операторская панель master_com12",
+        "path":  "/dashboard",
+        "appIcon":  "",
+        "includeClientData":  true,
+        "acceptsClientConfig":  [
+                                    "ui-notification",
+                                    "ui-control"
+                                ],
+        "showPathInSidebar":  false,
+        "headerContent":  "page",
+        "navigationStyle":  "default",
+        "titleBarStyle":  "default",
+        "showReconnectNotification":  true,
+        "notificationDisplayTime":  1,
+        "showDisconnectNotification":  true,
+        "allowInstall":  false
+    },
+    {
+        "id":  "ui_theme_master_com12_minimal",
+        "type":  "ui-theme",
+        "name":  "Тема master_com12",
+        "colors":  {
+                       "surface":  "#fffaf2",
+                       "primary":  "#0d6b57",
+                       "bgPage":  "#f0ebe2",
+                       "groupBg":  "#fffdf9",
+                       "groupOutline":  "#d8cfc0"
+                   },
+        "sizes":  {
+                      "density":  "comfortable",
+                      "pagePadding":  "16px",
+                      "groupGap":  "14px",
+                      "groupBorderRadius":  "18px",
+                      "widgetGap":  "10px"
+                  }
+    },
+    {
+        "id":  "ui_page_master_com12_minimal",
+        "type":  "ui-page",
+        "ui":  "ui_base_master_com12_minimal",
+        "name":  "Мастер COM12",
+        "path":  "/master-com12",
+        "icon":  "dashboard",
+        "layout":  "grid",
+        "theme":  "ui_theme_master_com12_minimal",
+        "order":  0,
+        "className":  "page-master-com12",
+        "visible":  "true",
+        "disabled":  "false",
+        "breakpoints":  [
+                            {
+                                "name":  "Default",
+                                "px":  0,
+                                "cols":  3
+                            },
+                            {
+                                "name":  "Tablet",
+                                "px":  576,
+                                "cols":  6
+                            },
+                            {
+                                "name":  "Small Desktop",
+                                "px":  768,
+                                "cols":  9
+                            },
+                            {
+                                "name":  "Desktop",
+                                "px":  1024,
+                                "cols":  12
+                            }
+                        ]
+    },
+    {
+        "id":  "ui_group_summary_master_com12",
+        "type":  "ui-group",
+        "page":  "ui_page_master_com12_minimal",
+        "name":  "Общий обзор",
+        "width":  12,
+        "height":  1,
+        "order":  0,
+        "showTitle":  false,
+        "visible":  true,
+        "disabled":  false,
+        "className":  "group-hero",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_boards_master_com12",
+        "type":  "ui-group",
+        "page":  "ui_page_master_com12_minimal",
+        "name":  "Состояние плат",
+        "width":  12,
+        "height":  1,
+        "order":  1,
+        "showTitle":  true,
+        "visible":  true,
+        "disabled":  false,
+        "className":  "group-boards",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_group_diagnostics_master_com12",
+        "type":  "ui-group",
+        "page":  "ui_page_master_com12_minimal",
+        "name":  "Контур связи",
+        "width":  12,
+        "height":  1,
+        "order":  2,
+        "showTitle":  true,
+        "visible":  true,
+        "disabled":  false,
+        "className":  "group-diagnostics",
+        "groupType":  "default"
+    },
+    {
+        "id":  "ui_template_page_style_master_com12",
+        "type":  "ui-template",
+        "z":  "tab_master_com12_minimal",
+        "group":  "",
+        "page":  "ui_page_master_com12_minimal",
+        "ui":  "",
+        "name":  "Стили страницы",
+        "order":  0,
+        "width":  0,
+        "height":  0,
+        "head":  "",
+        "format":  ".page-master-com12 {\n  background: #f3eee5;\n}\n\n.master-hero {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  background: linear-gradient(135deg, #f8f2e8 0%, #d9efe6 100%);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 24px;\n  box-shadow: 0 18px 40px rgba(40, 56, 49, 0.12);\n  color: #17352d;\n  padding: 24px;\n}\n\n.master-hero__header {\n  align-items: start;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 16px;\n  justify-content: space-between;\n}\n\n.master-eyebrow,\n.diag-card__eyebrow,\n.board-card__kicker {\n  color: #4e6a61;\n  font-size: 0.75rem;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.master-hero h2,\n.diag-card h3,\n.board-card__title {\n  margin: 0;\n}\n\n.master-hero h2 {\n  font-size: 2rem;\n  line-height: 1.1;\n  margin-top: 8px;\n}\n\n.master-hero p {\n  color: #456259;\n  font-size: 1rem;\n  margin: 10px 0 0;\n  max-width: 640px;\n}\n\n.master-timestamp {\n  background: rgba(255, 255, 255, 0.68);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 18px;\n  min-width: 220px;\n  padding: 14px 16px;\n}\n\n.master-timestamp span,\n.diag-list__label {\n  color: #5b7169;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 6px;\n}\n\n.master-timestamp strong {\n  font-size: 1.05rem;\n}\n\n.master-chip-grid,\n.board-grid {\n  display: grid;\n  gap: 14px;\n  margin-top: 18px;\n}\n\n.master-chip-grid {\n  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));\n}\n\n.board-grid {\n  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));\n}\n\n.master-chip-card,\n.board-card,\n.diag-card {\n  background: #fffdf9;\n  border: 1px solid #ddd4c6;\n  border-radius: 20px;\n  box-shadow: 0 10px 24px rgba(28, 36, 33, 0.07);\n}\n\n.master-chip-card {\n  padding: 16px 18px;\n}\n\n.master-chip-card__label {\n  color: #536b63;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 10px;\n}\n\n.master-chip {\n  align-items: center;\n  border-radius: 999px;\n  display: inline-flex;\n  font-size: 0.95rem;\n  font-weight: 700;\n  gap: 10px;\n  padding: 7px 14px;\n}\n\n.master-chip::before,\n.board-card__state::before {\n  background: currentColor;\n  border-radius: 50%;\n  content: \"\";\n  display: inline-block;\n  flex: 0 0 auto;\n}\n\n.master-chip::before {\n  height: 10px;\n  width: 10px;\n}\n\n.board-card {\n  padding: 20px;\n}\n\n.board-card__state {\n  align-items: center;\n  display: inline-flex;\n  font-size: 1.5rem;\n  font-weight: 700;\n  gap: 12px;\n  margin-top: 16px;\n}\n\n.board-card__state::before {\n  height: 12px;\n  width: 12px;\n}\n\n.board-card__hint {\n  color: #5c6f67;\n  margin: 14px 0 0;\n}\n\n.diag-card {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  padding: 20px;\n}\n\n.diag-card__header {\n  align-items: center;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 12px;\n  justify-content: space-between;\n}\n\n.diag-badge {\n  background: #e7f2ee;\n  border: 1px solid #b9d7cc;\n  border-radius: 999px;\n  color: #1d5f4d;\n  font-size: 0.82rem;\n  font-weight: 700;\n  padding: 6px 12px;\n}\n\n.diag-list {\n  display: grid;\n  gap: 12px;\n  list-style: none;\n  margin: 18px 0 0;\n  padding: 0;\n}\n\n.diag-list li {\n  background: #f7f2ea;\n  border-radius: 14px;\n  padding: 12px 14px;\n}\n\n.diag-topic {\n  background: #edf3f0;\n  border-radius: 10px;\n  color: #214e41;\n  display: inline-block;\n  font-family: Consolas, \"Courier New\", monospace;\n  font-size: 0.9rem;\n  margin-top: 4px;\n  padding: 4px 8px;\n}\n\n.diag-card__note {\n  color: #536961;\n  margin: 16px 0 0;\n}\n\n.is-online {\n  background: #e4f7eb;\n  border-color: #b8e1c6;\n  color: #0e7b56;\n}\n\n.is-offline {\n  background: #fde9e8;\n  border-color: #f2c2bf;\n  color: #bb4a43;\n}\n\n.is-unknown {\n  background: #f3efdf;\n  border-color: #ddd3a8;\n  color: #8d7425;\n}\n\n@media (max-width: 720px) {\n  .master-hero {\n    padding: 18px;\n  }\n\n  .master-hero h2 {\n    font-size: 1.6rem;\n  }\n\n  .master-timestamp {\n    width: 100%;\n  }\n}",
+        "storeOutMessages":  true,
+        "passthru":  true,
+        "resendOnRefresh":  true,
+        "templateScope":  "page:style",
+        "className":  "",
+        "x":  180,
+        "y":  500,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_template_summary_minimal",
+        "type":  "ui-template",
+        "z":  "tab_master_com12_minimal",
+        "group":  "ui_group_summary_master_com12",
+        "page":  "",
+        "ui":  "",
+        "name":  "Главный экран",
+        "order":  0,
+        "width":  12,
+        "height":  0,
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv v-if=\"msg \u0026\u0026 msg.payload\" class=\"master-hero\"\u003e\n    \u003cdiv class=\"master-hero__header\"\u003e\n      \u003cdiv\u003e\n        \u003cdiv class=\"master-eyebrow\"\u003eОператорская панель\u003c/div\u003e\n        \u003ch2\u003e{{ msg.payload.title }}\u003c/h2\u003e\n        \u003cp\u003e{{ msg.payload.subtitle }}\u003c/p\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"master-timestamp\"\u003e\n        \u003cspan\u003eПоследнее обновление\u003c/span\u003e\n        \u003cstrong\u003e{{ msg.payload.lastUpdate }}\u003c/strong\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"master-chip-grid\"\u003e\n      \u003cdiv class=\"master-chip-card\"\u003e\n        \u003cspan class=\"master-chip-card__label\"\u003eМастер\u003c/span\u003e\n        \u003cspan class=\"master-chip\" :class=\"\u0027is-\u0027 + msg.payload.master.key\"\u003e{{ msg.payload.master.text }}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"master-chip-card\"\u003e\n        \u003cspan class=\"master-chip-card__label\"\u003eWi-Fi\u003c/span\u003e\n        \u003cspan class=\"master-chip\" :class=\"\u0027is-\u0027 + msg.payload.wifi.key\"\u003e{{ msg.payload.wifi.text }}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"master-chip-card\"\u003e\n        \u003cspan class=\"master-chip-card__label\"\u003eMQTT\u003c/span\u003e\n        \u003cspan class=\"master-chip\" :class=\"\u0027is-\u0027 + msg.payload.mqtt.key\"\u003e{{ msg.payload.mqtt.text }}\u003c/span\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n  \u003c/div\u003e\n\u003c/template\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  710,
+        "y":  380,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_template_boards_minimal",
+        "type":  "ui-template",
+        "z":  "tab_master_com12_minimal",
+        "group":  "ui_group_boards_master_com12",
+        "page":  "",
+        "ui":  "",
+        "name":  "Карточки плат",
+        "order":  0,
+        "width":  12,
+        "height":  0,
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv v-if=\"msg \u0026\u0026 msg.payload\" class=\"board-grid\"\u003e\n    \u003carticle class=\"board-card\" :class=\"\u0027is-\u0027 + msg.payload.board12.key\"\u003e\n      \u003cdiv class=\"board-card__kicker\"\u003eКонтроллер линии\u003c/div\u003e\n      \u003ch3 class=\"board-card__title\"\u003e{{ msg.payload.board12.title }}\u003c/h3\u003e\n      \u003cdiv class=\"board-card__state\"\u003e{{ msg.payload.board12.text }}\u003c/div\u003e\n      \u003cp class=\"board-card__hint\"\u003e{{ msg.payload.board12.hint }}\u003c/p\u003e\n    \u003c/article\u003e\n\n    \u003carticle class=\"board-card\" :class=\"\u0027is-\u0027 + msg.payload.board13.key\"\u003e\n      \u003cdiv class=\"board-card__kicker\"\u003eКонтроллер линии\u003c/div\u003e\n      \u003ch3 class=\"board-card__title\"\u003e{{ msg.payload.board13.title }}\u003c/h3\u003e\n      \u003cdiv class=\"board-card__state\"\u003e{{ msg.payload.board13.text }}\u003c/div\u003e\n      \u003cp class=\"board-card__hint\"\u003e{{ msg.payload.board13.hint }}\u003c/p\u003e\n    \u003c/article\u003e\n  \u003c/div\u003e\n\u003c/template\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  710,
+        "y":  420,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "ui_template_diagnostics_minimal",
+        "type":  "ui-template",
+        "z":  "tab_master_com12_minimal",
+        "group":  "ui_group_diagnostics_master_com12",
+        "page":  "",
+        "ui":  "",
+        "name":  "Контур связи",
+        "order":  0,
+        "width":  12,
+        "height":  0,
+        "head":  "",
+        "format":  "\u003ctemplate\u003e\n  \u003cdiv v-if=\"msg \u0026\u0026 msg.payload\" class=\"diag-card\"\u003e\n    \u003cdiv class=\"diag-card__header\"\u003e\n      \u003cdiv\u003e\n        \u003cdiv class=\"diag-card__eyebrow\"\u003eКонтур связи\u003c/div\u003e\n        \u003ch3\u003eЧто сейчас читает экран\u003c/h3\u003e\n      \u003c/div\u003e\n      \u003cspan class=\"diag-badge\"\u003eMQTT 1884\u003c/span\u003e\n    \u003c/div\u003e\n\n    \u003cul class=\"diag-list\"\u003e\n      \u003cli\u003e\n        \u003cspan class=\"diag-list__label\"\u003eТопик статуса\u003c/span\u003e\n        \u003ccode class=\"diag-topic\"\u003e{{ msg.payload.topics[0] }}\u003c/code\u003e\n      \u003c/li\u003e\n      \u003cli\u003e\n        \u003cspan class=\"diag-list__label\"\u003eТопик присутствия\u003c/span\u003e\n        \u003ccode class=\"diag-topic\"\u003e{{ msg.payload.topics[1] }}\u003c/code\u003e\n      \u003c/li\u003e\n    \u003c/ul\u003e\n\n    \u003cp class=\"diag-card__note\"\u003e{{ msg.payload.note }}\u003c/p\u003e\n  \u003c/div\u003e\n\u003c/template\u003e",
+        "storeOutMessages":  true,
+        "passthru":  false,
+        "resendOnRefresh":  true,
+        "templateScope":  "local",
+        "className":  "",
+        "x":  720,
+        "y":  460,
+        "wires":  [
+                      [
+
+                      ]
+                  ]
+    },
+    {
+        "id":  "mqtt_broker_master1884_minimal",
+        "type":  "mqtt-broker",
+        "name":  "Local Mosquitto 1884",
+        "broker":  "127.0.0.1",
+        "port":  "1884",
+        "clientid":  "nodered_master_com12_minimal",
+        "autoConnect":  true,
+        "usetls":  false,
+        "protocolVersion":  "4",
+        "keepalive":  "60",
+        "cleansession":  true,
+        "autoUnsubscribe":  true,
+        "birthTopic":  "",
+        "birthQos":  "0",
+        "birthRetain":  "false",
+        "birthPayload":  "",
+        "birthMsg":  {
+
+                     },
+        "closeTopic":  "",
+        "closeQos":  "0",
+        "closeRetain":  "false",
+        "closePayload":  "",
+        "closeMsg":  {
+
+                     },
+        "willTopic":  "",
+        "willQos":  "0",
+        "willRetain":  "false",
+        "willPayload":  "",
+        "willMsg":  {
+
+                    },
+        "userProps":  "",
+        "sessionExpiry":  ""
+    }
+]

@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "app/conveyor_status_runtime.h"
 #include "legacy/program1.h"
 
 namespace {
@@ -256,6 +257,7 @@ void stopProgram1AfterFailure(const char *stepName)
     g_program1PassIndex = 0;
     g_program1StartedFromBuffer = false;
     clearProgram1ManipulatorBatchReady();
+    app::conveyorFeedSideNoteProgram1Aborted();
 }
 
 bool runProgram1PassShiftSequence(uint8_t passIndex, bool withPositional)
@@ -286,6 +288,7 @@ void startProgram1BufferFillCycle()
         g_program1State = Program1State::Idle;
         g_program1PassIndex = 0;
         g_program1StartedFromBuffer = false;
+        app::conveyorFeedSideNoteProgram1Aborted();
         return;
     }
     g_program1State = Program1State::WaitBufferFillC2Done;
@@ -300,6 +303,7 @@ void finishProgram1Run()
     g_program1State = Program1State::Idle;
     g_program1PassIndex = 0;
     g_program1StartedFromBuffer = false;
+    app::conveyorFeedSideNoteProgram1Finished();
 }
 
 void printProgram1PassStartMessage(uint8_t passIndex)
@@ -337,6 +341,7 @@ void runProgram1Pass()
         g_program1State = Program1State::Idle;
         g_program1PassIndex = 0;
         g_program1StartedFromBuffer = false;
+        app::conveyorFeedSideNoteProgram1Aborted();
         return;
     }
 
@@ -349,9 +354,11 @@ void runProgram1Pass()
     }
 
     g_program1StartedFromBuffer = false;
+    app::conveyorFeedSideNoteProgram1PassShiftCompleted(passIndex);
 
     if (passIndex == 3) {
         markProgram1ManipulatorBatchReady();
+        app::conveyorFeedSideNoteBatchReadyLatched();
     }
 
     if (passIndex < 3) {
@@ -394,7 +401,10 @@ void startProgram1()
     g_program1StartedFromBuffer = false;
     clearProgram1ManipulatorBatchReady();
 
-    if (program1GetBufferReady()) {
+    const bool startedFromBuffer = program1GetBufferReady();
+    app::conveyorFeedSideNoteProgram1Started(startedFromBuffer);
+
+    if (startedFromBuffer) {
         Serial.println("P1: буфер с 2 тарелками найден, начинаем сразу с C #1.");
         program1ConsumeBuffer();
         g_program1StartedFromBuffer = true;

@@ -1,0 +1,1 @@
+fyl/master_com12/resp {"seq":3,"cmd":"COMMON STATUS","accepted":true,"result":"COMMON status printed"}

@@ -17,8 +17,14 @@ extern bool greaseRemovalInProgress;
 
 // Локальные переменные
 static uint8_t currentStep = 0;
+static bool step3ReachedLatch = false;
 static bool step7ReachedLatch = false;
 static bool recoveryMode = false;
+
+void resetWorkCycleReadyLatches() {
+    step3ReachedLatch = false;
+    step7ReachedLatch = false;
+}
 
 // =============================================
 // НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ БЕЗОПАСНОГО ВОССТАНОВЛЕНИЯ
@@ -948,6 +954,16 @@ bool executeWorkCycle() {
             uint8_t actualStep = analyzeCurrentStateAndGetStartStep(currentStep);
             currentStep = actualStep;
         }
+
+        // Recovery продолжается уже после части цикла:
+        // если стартуем строго позже 3/7 шага, соответствующие latch-и
+        // должны быть подняты до входа в основной цикл шагов.
+        if (currentStep > 3) {
+            step3ReachedLatch = true;
+        }
+        if (currentStep > 7) {
+            step7ReachedLatch = true;
+        }
     } else {
         Serial.println("\n=== НАЧАЛО РАБОЧЕГО ЦИКЛА ===");
     }
@@ -962,7 +978,12 @@ bool executeWorkCycle() {
             saveWorkCycleState(step, true);
             workCycleInProgress = false;
             recoveryMode = false;
+            resetWorkCycleReadyLatches();
             return false;
+        }
+
+        if (step == 3) {
+            step3ReachedLatch = true;
         }
 
         if (step == 7) {
@@ -984,6 +1005,7 @@ bool executeWorkCycle() {
     
     workCycleInProgress = false;
     recoveryMode = false;
+    resetWorkCycleReadyLatches();
     return false;
 }
 
@@ -1003,7 +1025,7 @@ bool startWorkCycle(bool fromRecovery) {
         return false;
     }
 
-    step7ReachedLatch = false;
+    resetWorkCycleReadyLatches();
     
     // Если это восстановление, пропускаем проверку начального состояния
     recoveryMode = fromRecovery;
@@ -1039,6 +1061,10 @@ bool isWorkCycleInProgress() {
 
 uint8_t getWorkCycleCurrentStep() {
     return currentStep;
+}
+
+bool isWorkCycleStep3Reached() {
+    return step3ReachedLatch;
 }
 
 bool isWorkCycleStep7Reached() {
@@ -1098,11 +1124,13 @@ bool recoverWorkCycle() {
             Serial.println("Не удалось вернуться в начальное состояние!");
             Serial.println("Требуется ручное вмешательство!");
             clearWorkCycleState();
+            resetWorkCycleReadyLatches();
             return false;
         }
 
         Serial.println("✓ Система в начальном состоянии, можно начинать новый цикл");
         clearWorkCycleState();
+        resetWorkCycleReadyLatches();
         return false;
     }
 
@@ -1124,6 +1152,7 @@ bool recoverWorkCycle() {
         recoveryMode = false;
         workCycleInProgress = false;
         isMoving = false;
+        resetWorkCycleReadyLatches();
 
         return false;
     }

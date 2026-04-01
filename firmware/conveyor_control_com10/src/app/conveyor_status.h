@@ -14,7 +14,11 @@ struct ConveyorStatusInputs {
     groups::sealer::SealerStatus sealer = {};
     bool sensorConflict = false;
     bool program1Active = false;
+    uint8_t program1StateCode = 0;
+    uint8_t program1PassIndex = 0;
     bool batchReady = false;
+    bool feedSideEmptyStrict = false;
+    bool feedSideEmptyValid = false;
     bool flagUp = false;
 };
 
