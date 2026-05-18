@@ -2,9 +2,11 @@
 
 #include <Arduino.h>
 
+#include "app/runtime_log.h"
 #include "app/motion_control.h"
 #include "core/pins.h"
 #include "core/settings.h"
+#include "legacy/program1.h"
 
 namespace {
 
@@ -38,6 +40,14 @@ uint32_t g_c2CycleStartStep = 0;
 uint32_t g_c2CycleStartMs = 0;
 uint32_t g_c2SecondReleaseSteps = 0;
 
+bool shouldLogCycle2Trace()
+{
+    if (program1GetStateCode() == 0U) {
+        return true;
+    }
+    return app::runtime_log::isDebugEnabled();
+}
+
 void printC2Prefix()
 {
     Serial.print("C2: ");
@@ -55,12 +65,14 @@ void captureC2FirstLeaveIfNeeded()
     g_c2FirstLeaveStep = motionTotalSteps();
     g_c2FirstUTSteps = motionTotalSteps() - g_c2FirstFlagDownStep;
 
-    printC2Prefix();
-    Serial.print("1-я тарелка ушла с датчика, UT=");
-    Serial.print(g_c2FirstUTSteps);
-    Serial.print(" шагов (");
-    Serial.print(static_cast<float>(g_c2FirstUTSteps) / static_cast<float>(core::g_settings.pulsesPerMm), 1);
-    Serial.println(" мм).");
+    if (shouldLogCycle2Trace()) {
+        printC2Prefix();
+        Serial.print("1-я тарелка ушла с датчика, UT=");
+        Serial.print(g_c2FirstUTSteps);
+        Serial.print(" шагов (");
+        Serial.print(static_cast<float>(g_c2FirstUTSteps) / static_cast<float>(core::g_settings.pulsesPerMm), 1);
+        Serial.println(" мм).");
+    }
 
     uint32_t releaseWindowSteps = 0;
     if (g_c2FirstUTSteps < core::g_settings.c2ReleaseTargetSteps) {
@@ -77,8 +89,10 @@ void captureC2SecondLeaveIfNeeded()
 
     g_c2SecondLeaveCaptured = true;
     g_c2SecondLeaveStep = motionTotalSteps();
-    printC2Prefix();
-    Serial.println("2-я тарелка ушла с датчика.");
+    if (shouldLogCycle2Trace()) {
+        printC2Prefix();
+        Serial.println("2-я тарелка ушла с датчика.");
+    }
 }
 
 void scheduleC2FinalMove()
@@ -88,10 +102,12 @@ void scheduleC2FinalMove()
     g_c2State = C2State::FinalMove;
     armMotionStopAfterSteps(g_c2FinalMoveSteps);
 
-    printC2Prefix();
-    Serial.print("финальный добег ");
-    Serial.print(static_cast<float>(g_c2FinalMoveSteps) / static_cast<float>(core::g_settings.pulsesPerMm), 1);
-    Serial.println(" мм (минимум для 2-й тарелки).");
+    if (shouldLogCycle2Trace()) {
+        printC2Prefix();
+        Serial.print("финальный добег ");
+        Serial.print(static_cast<float>(g_c2FinalMoveSteps) / static_cast<float>(core::g_settings.pulsesPerMm), 1);
+        Serial.println(" мм (минимум для 2-й тарелки).");
+    }
 }
 
 void startCycle2Internal()
@@ -123,14 +139,16 @@ void startCycle2Internal()
     g_c2CycleStartMs = millis();
     g_c2SecondReleaseSteps = 0;
 
-    printC2Prefix();
-    Serial.println("старт. Цель: 1-я тарелка в упоре, 2-я с зазором 34 мм.");
-    if (plateAlreadyOnSensor) {
+    if (shouldLogCycle2Trace()) {
         printC2Prefix();
-        if (g_c2CenterStepsActive == 0U) {
-            Serial.println("тарелка уже на датчике, старт без центрирования (флаг поднят).");
-        } else {
-            Serial.println("тарелка уже на датчике, выполняем стартовое центрирование +20 мм (флаг поднят).");
+        Serial.println("старт. Цель: 1-я тарелка в упоре, 2-я с зазором 34 мм.");
+        if (plateAlreadyOnSensor) {
+            printC2Prefix();
+            if (g_c2CenterStepsActive == 0U) {
+                Serial.println("тарелка уже на датчике, старт без центрирования (флаг поднят).");
+            } else {
+                Serial.println("тарелка уже на датчике, выполняем стартовое центрирование +20 мм (флаг поднят).");
+            }
         }
     }
 }
@@ -158,12 +176,14 @@ void processCycle2()
             g_c2Active = false;
             g_c2State = C2State::Idle;
             const uint32_t cycleDurationMs = millis() - g_c2CycleStartMs;
-            printC2Prefix();
-            Serial.print("Движение завершено. время цикла ");
-            Serial.print(cycleDurationMs);
-            Serial.print(" мс (");
-            Serial.print(static_cast<float>(cycleDurationMs) / 1000.0F, 1);
-            Serial.println(" с).");
+            if (shouldLogCycle2Trace()) {
+                printC2Prefix();
+                Serial.print("Движение завершено. время цикла ");
+                Serial.print(cycleDurationMs);
+                Serial.print(" мс (");
+                Serial.print(static_cast<float>(cycleDurationMs) / 1000.0F, 1);
+                Serial.println(" с).");
+            }
             return;
         }
 
@@ -179,11 +199,13 @@ void processCycle2()
             if (isPlateAtSensorFiltered()) {
                 g_c2CenterStartStep = motionTotalSteps();
                 g_c2State = C2State::CenterFirstPlate;
-                printC2Prefix();
-                if (g_c2CenterStepsActive == 0U) {
-                    Serial.println("1-я тарелка найдена, центрирование пропущено.");
-                } else {
-                    Serial.println("1-я тарелка найдена, центрирование +20 мм.");
+                if (shouldLogCycle2Trace()) {
+                    printC2Prefix();
+                    if (g_c2CenterStepsActive == 0U) {
+                        Serial.println("1-я тарелка найдена, центрирование пропущено.");
+                    } else {
+                        Serial.println("1-я тарелка найдена, центрирование +20 мм.");
+                    }
                 }
             }
             return;
@@ -195,8 +217,10 @@ void processCycle2()
                 g_c2FirstLeaveCaptured = false;
                 g_c2FirstUTSteps = 0;
                 g_c2State = C2State::TrackFirstLeaveAndOpen;
-                printC2Prefix();
-                Serial.println("флаг опущен для 1-й тарелки.");
+                if (shouldLogCycle2Trace()) {
+                    printC2Prefix();
+                    Serial.println("флаг опущен для 1-й тарелки.");
+                }
             }
             return;
 
@@ -206,8 +230,10 @@ void processCycle2()
             if ((uint32_t)(motionTotalSteps() - g_c2FirstFlagDownStep) >= core::g_settings.c2FlagReopenSteps) {
                 digitalWrite(PIN_FLAG, core::hw_config::FLAG_UP_LEVEL);
                 g_c2State = C2State::SeekSecondPlate;
-                printC2Prefix();
-                Serial.println("флаг поднят, поиск 2-й тарелки.");
+                if (shouldLogCycle2Trace()) {
+                    printC2Prefix();
+                    Serial.println("флаг поднят, поиск 2-й тарелки.");
+                }
             }
             return;
 
@@ -217,11 +243,13 @@ void processCycle2()
             if (isPlateAtSensorFiltered()) {
                 g_c2CenterStartStep = motionTotalSteps();
                 g_c2State = C2State::CenterSecondPlate;
-                printC2Prefix();
-                if (g_c2CenterStepsActive == 0U) {
-                    Serial.println("2-я тарелка найдена, центрирование пропущено.");
-                } else {
-                    Serial.println("2-я тарелка найдена, центрирование +20 мм.");
+                if (shouldLogCycle2Trace()) {
+                    printC2Prefix();
+                    if (g_c2CenterStepsActive == 0U) {
+                        Serial.println("2-я тарелка найдена, центрирование пропущено.");
+                    } else {
+                        Serial.println("2-я тарелка найдена, центрирование +20 мм.");
+                    }
                 }
             }
             return;
@@ -231,11 +259,13 @@ void processCycle2()
 
             if ((uint32_t)(motionTotalSteps() - g_c2CenterStartStep) >= g_c2CenterStepsActive) {
                 g_c2State = C2State::WaitSecondReleaseTiming;
-                printC2Prefix();
-                if (g_c2CenterStepsActive == 0U) {
-                    Serial.println("2-я тарелка без центрирования, расчет момента отпускания.");
-                } else {
-                    Serial.println("2-я тарелка центрирована, расчет момента отпускания.");
+                if (shouldLogCycle2Trace()) {
+                    printC2Prefix();
+                    if (g_c2CenterStepsActive == 0U) {
+                        Serial.println("2-я тарелка без центрирования, расчет момента отпускания.");
+                    } else {
+                        Serial.println("2-я тарелка центрирована, расчет момента отпускания.");
+                    }
                 }
             }
             return;
@@ -255,8 +285,10 @@ void processCycle2()
                     g_c2SecondFlagDownStep = motionTotalSteps();
                     g_c2SecondLeaveCaptured = false;
                     g_c2State = C2State::MoveAfterSecondRelease;
-                    printC2Prefix();
-                    Serial.println("флаг опущен для 2-й тарелки.");
+                    if (shouldLogCycle2Trace()) {
+                        printC2Prefix();
+                        Serial.println("флаг опущен для 2-й тарелки.");
+                    }
                 }
             }
             return;
@@ -271,8 +303,10 @@ void processCycle2()
                     scheduleC2FinalMove();
                 } else {
                     g_c2State = C2State::WaitSecondLeave;
-                    printC2Prefix();
-                    Serial.println("ждем уход 2-й тарелки с датчика.");
+                    if (shouldLogCycle2Trace()) {
+                        printC2Prefix();
+                        Serial.println("ждем уход 2-й тарелки с датчика.");
+                    }
                 }
             }
             return;

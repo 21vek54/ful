@@ -1,0 +1,172 @@
+<mxfile host="app.diagrams.net" modified="2026-04-06T16:30:00.000Z" agent="Codex" version="29.6.6">
+  <diagram id="common-post7-target-architecture" name="COMMON POST7 target architecture">
+    <mxGraphModel dx="1800" dy="1200" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="2" value="Целевая архитектура COMMON: master / COM10 / COM11 / POST7" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="Допущение для этой схемы: `POST7` живет на COM10 и скрывает локальную orchestration `SEALER + OUTFEED` за одним production-контрактом.&#xa;Master не владеет внутренним порядком `SEAL` против `OUTFEED`; он владеет только стартом job, pause/abort верхнего уровня и ожиданием high-level completion." style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="980" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="10" value="Раздел" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9e2f3;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="160" width="170" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="COM12 master / COMMON" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1f4e79;strokeColor=#1f4e79;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="190" y="160" width="470" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="COM10 field controller" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2e7d32;strokeColor=#2e7d32;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="660" y="160" width="470" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="COM11 manipulator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#6a1b9a;strokeColor=#6a1b9a;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="160" width="420" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="I2C / production contract" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#7f6000;strokeColor=#7f6000;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="160" width="520" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="20" value="1. Runtime-блоки" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="210" width="170" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Master видит 3 внешних runtime-блока:&#xa;1. `FEED_SIDE`&#xa;2. `MANIPULATOR`&#xa;3. `POST_STEP7`&#xa;&#xa;Master сам не отдельная сущность линии, а координатор." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="210" width="470" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="COM10 владеет 3 локальными блоками:&#xa;1. `feed side`&#xa;2. `sealer`&#xa;3. `outfeed`&#xa;&#xa;Поверх них живет local supervisor `POST7`." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="210" width="470" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="COM11 остается локальным владельцем `R`-цикла.&#xa;Master не дробит его рабочий цикл на load/unload команды." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="210" width="420" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="Production start для step7 больше не пара raw-команд.&#xa;Вместо этого: один high-level `POST7 START ...`." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="210" width="520" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="30" value="2. Бизнес-сущности" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="350" width="170" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="31" value="Master может помнить 4 high-level сущности:&#xa;`FEED_SIDE`, `MANIPULATOR`, `SEALER`, `OUTFEED`.&#xa;&#xa;Но `SEALER` и `OUTFEED` не должны быть двумя отдельными production-starts." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="350" width="470" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="32" value="COM10 внутри себя может хранить более детальную модель:&#xa;`EMPTY / LOADED / RUNNING / DONE` для `SEALER`,&#xa;локальные фазы `OTCYCLE`,&#xa;локальные причины отказа и manual recovery latch." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="350" width="470" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="33" value="COM11 отдает мастеру только свой coarse runtime:&#xa;`IDLE / BUSY / ERROR`, `step`, `step3_ready`, `step7_ready`, стартовая поза." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="350" width="420" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="34" value="Граница ответственности:&#xa;Master хранит модель линии.&#xa;COM10 хранит механику post-step7.&#xa;COM11 хранит механику `R`." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="350" width="520" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="40" value="3. Обычный цикл&#xa;`POST7 START LOAD`" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="510" width="170" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="41" value="Master делает только high-level действия:&#xa;1. ждет `manipulator.step7_ready = 1`&#xa;2. шлет один `POST7 START LOAD`&#xa;3. переходит в ожидание completion&#xa;&#xa;Master не решает, параллельно там `SEAL + OUTFEED` или последовательно." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="510" width="470" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="42" value="COM10 supervisor `POST7` локально делает:&#xa;1. фиксирует `sealerCompletionSeqBase` и `outfeedStep2SeqBase`&#xa;2. стартует `OTCYCLE`&#xa;3. стартует `SEAL START` или локальную последовательность, если так безопаснее&#xa;4. ждет settled-конца outfeed и completion sealer&#xa;5. решает локальные guard/reject/abort" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="510" width="470" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="43" value="COM11 в этом фрагменте уже выполнил свою часть до `step7`.&#xa;После `step7_ready` master может не ждать шаг 8 для старта post-step7." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="510" width="420" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="44" value="Completion-контракт для `LOAD`:&#xa;- `outfeed_ready_for_batch = 1`&#xa;- `sealer_completion_seq != seq_base`&#xa;&#xa;Это и есть production-ready конец job для мастера." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="510" width="520" height="210" as="geometry" />
+        </mxCell>
+
+        <mxCell id="50" value="4. Mandatory unload&#xa;`POST7 START UNLOAD_ONLY`" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="730" width="170" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="51" value="Master сам принимает решение, нужен ли mandatory unload:&#xa;это остается master-owned, потому что требует цикла манипулятора и правил паузы/line-state." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="730" width="470" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="52" value="COM10 при `UNLOAD_ONLY` делает только outfeed/post-step7 часть.&#xa;Новой запайки не стартует.&#xa;Это локально тот же supervisor, но mode другой." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="730" width="470" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="53" value="COM11 перед этим делает unload-only цикл манипулятора как обычный `R` с пустой правой стороной, если так решила логика линии." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="730" width="420" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="54" value="Completion-контракт для `UNLOAD_ONLY`:&#xa;- только `outfeed_ready_for_batch = 1`&#xa;&#xa;`sealer_completion_seq` для этого mode не обязателен." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="730" width="520" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="60" value="5. Pause / abort / retry" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="920" width="170" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="61" value="`pause` остается master-owned:&#xa;- не стартовать новые обычные циклы&#xa;- решить, нужен ли final block / mandatory unload&#xa;- дождаться устойчивого snapshot линии&#xa;&#xa;`abort` тоже master-owned как верхнеуровневое намерение." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="920" width="470" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="62" value="COM10 по `POST7 STOP`:&#xa;- останавливает outfeed честно&#xa;- если sealer уже in-flight, не фейкует success&#xa;- поднимает local `manual recovery required` latch&#xa;- до снятия latch новый production start должен быть запрещен" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="920" width="470" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="63" value="COM11 в pause/abort не переписывается.&#xa;Его recovery и сервисные режимы остаются отдельной темой." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="920" width="420" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="64" value="`retry` не должен быть blind-retry raw-команд.&#xa;Если локальное состояние уже частично продвинулось, мастер должен увидеть coarse fault/manual recovery, а не молча перезапускать `SEAL` или `OTCYCLE`." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="920" width="520" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="70" value="6. Production-обязательные статусы" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1170" width="170" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="71" value="Master должен опираться только на high-level сигналы:&#xa;- `batch_ready`&#xa;- `batch_seq`&#xa;- `feed_side_empty_valid/strict`&#xa;- `manipulator.step3_ready`&#xa;- `manipulator.step7_ready`&#xa;- `alarm / error`" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="1170" width="470" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="72" value="COM10 должен продолжать отдавать:&#xa;- `outfeed_ready_for_batch` как settled для COMMON&#xa;- `sealer_completion_seq`&#xa;- coarse `busy / alarm / error`&#xa;- `program1StateCode / program1PassIndex`&#xa;- `batchReadySequence`" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="1170" width="470" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="73" value="COM11 должен продолжать отдавать:&#xa;- `IDLE / BUSY / ERROR`&#xa;- `current step`&#xa;- `step3_ready`&#xa;- `step7_ready`&#xa;- стартовую позу / coarse ready bits" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="1170" width="420" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="74" value="В 28-байтном кадре лучше удержать минимум:&#xa;- start-команды не раздувать&#xa;- completion читать через already-existing bits/seq&#xa;- новый dedicated status добавлять только если без него получается нечестный fault contract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="1170" width="520" height="210" as="geometry" />
+        </mxCell>
+
+        <mxCell id="80" value="7. Только диагностика" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1390" width="170" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="81" value="Master не должен зависеть в production от:&#xa;- `step2_active`&#xa;- `vfd_timed_run_active`&#xa;- `sealer_start_pulse_active`&#xa;- `sealer_done_active`&#xa;- внутренних `lastEvent`" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="190" y="1390" width="470" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="82" value="COM10 может хранить и печатать эти low-level признаки для стенда и debugging, но production-runtime не должен на них разваливаться." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="660" y="1390" width="470" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="83" value="COM11 diagnostics тоже отдельны: raw sensor bits, ambiguous grip start, локальные сервисные команды." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="1390" width="420" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="84" value="Правило для архитектуры: diagnostic fields могут быть широкими и удобными, но production-решение должно приниматься по короткому coarse контракту." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1550" y="1390" width="520" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="90" value="Нормальный runtime-поток" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#4a86e8;" edge="1" parent="1" source="41" target="42">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="91" value="`step7_ready` дает право стартовать post-step7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#8e7cc3;" edge="1" parent="1" source="43" target="41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="92" value="Completion для `LOAD`" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="42" target="44">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="93" value="Mandatory unload path" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#e69138;" edge="1" parent="1" source="51" target="52">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="94" value="Completion для `UNLOAD_ONLY`" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="52" target="54">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="95" value="Abort верхнего уровня" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#cc0000;" edge="1" parent="1" source="61" target="62">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="100" value="Ключевая мысль" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1570" width="760" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="101" value="Master должен оставаться координатором по готовностям, а не владельцем внутренней механики `SEALER + OUTFEED`.&#xa;`POST7` нужен не ради новой сложности, а ради правильной границы ответственности." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1595" width="720" height="50" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

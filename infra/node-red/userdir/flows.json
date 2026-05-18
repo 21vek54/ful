@@ -1,1024 +1,776 @@
-﻿[
+[
     {
-        "id":  "tab_master_com12_minimal",
-        "type":  "tab",
-        "label":  "Оператор: мастер COM12",
-        "disabled":  false,
-        "info":  "Операторский экран master_com12. Источники: status и online."
+        "id": "tab_master_com12_minimal",
+        "type": "tab",
+        "label": "Оператор: мастер COM12",
+        "disabled": false,
+        "info": "Операторский экран master_com12. Источники: status и online."
     },
     {
-        "id":  "comment_master_com12_minimal",
-        "type":  "comment",
-        "z":  "tab_master_com12_minimal",
-        "name":  "MQTT-топики",
-        "info":  "fyl/master_com12/status\nfyl/master_com12/online\nfyl/master_com12/resp",
-        "x":  140,
-        "y":  60,
-        "wires":  [
-
-                  ]
+        "id": "comment_master_com12_minimal",
+        "type": "comment",
+        "z": "tab_master_com12_minimal",
+        "name": "MQTT-топики",
+        "info": "fyl/master_com12/status\nfyl/master_com12/online\nfyl/master_com12/resp",
+        "x": 140,
+        "y": 60,
+        "wires": []
     },
     {
-        "id":  "mqtt_in_master_status_minimal",
-        "type":  "mqtt in",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Статус master",
-        "topic":  "fyl/master_com12/status",
-        "qos":  "0",
-        "datatype":  "auto-detect",
-        "broker":  "mqtt_broker_master1884_minimal",
-        "nl":  false,
-        "rap":  true,
-        "rh":  0,
-        "inputs":  0,
-        "x":  140,
-        "y":  140,
-        "wires":  [
-                      [
-                          "debug_status_raw_minimal",
-                          "func_parse_status_minimal",
-                          "func_operator_mqtt_log_capture"
-                      ]
-                  ]
+        "id": "mqtt_in_master_status_minimal",
+        "type": "mqtt in",
+        "z": "tab_master_com12_minimal",
+        "name": "Статус master",
+        "topic": "fyl/master_com12/status",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker_master1884_minimal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 140,
+        "wires": [
+            [
+                "debug_status_raw_minimal",
+                "func_parse_status_minimal"
+            ]
+        ]
     },
     {
-        "id":  "func_parse_status_minimal",
-        "type":  "function",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Разбор status",
-        "func":  "let payload = msg.payload;\nif (typeof payload === \"string\") {\n    try {\n        payload = JSON.parse(payload);\n    } catch (err) {\n        node.warn(\"Ошибка разбора status JSON: \" + err.message);\n        return null;\n    }\n}\n\nif (!payload || typeof payload !== \"object\") {\n    return null;\n}\n\nfunction normalizeBoard(value) {\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\") return \"online\";\n    if (text === \"offline\") return \"offline\";\n    return \"unknown\";\n}\n\nfunction safeObject(value) {\n    return value && typeof value === \"object\" ? value : {};\n}\n\nmsg.payload = {\n    wifi: !!payload.wifi,\n    mqtt: !!payload.mqtt,\n    board12: normalizeBoard(payload.board12),\n    board13: normalizeBoard(payload.board13),\n    seal: safeObject(payload.seal),\n    common_cycle: safeObject(payload.common_cycle),\n    cmd_seq: Number(payload.cmd_seq ?? 0),\n    last_cmd: String(payload.last_cmd ?? \"\"),\n    receivedAt: new Date().toISOString()\n};\n\nreturn msg;",
-        "outputs":  1,
-        "timeout":  "",
-        "noerr":  0,
-        "initialize":  "",
-        "finalize":  "",
-        "libs":  [
-
-                 ],
-        "x":  400,
-        "y":  140,
-        "wires":  [
-                      [
-                          "debug_status_parsed_minimal",
-                          "func_operator_model_minimal",
-                          "func_operator_controls_model_minimal"
-                      ]
-                  ]
+        "id": "func_parse_status_minimal",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "name": "Разбор status",
+        "func": "let payload = msg.payload;\nif (typeof payload === \"string\") {\n    try {\n        payload = JSON.parse(payload);\n    } catch (err) {\n        node.warn(\"Ошибка разбора status JSON: \" + err.message);\n        return null;\n    }\n}\n\nif (!payload || typeof payload !== \"object\") {\n    return null;\n}\n\nfunction normalizeBoard(value) {\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\") return \"online\";\n    if (text === \"offline\") return \"offline\";\n    return \"unknown\";\n}\n\nfunction safeObject(value) {\n    return value && typeof value === \"object\" ? value : {};\n}\n\nconst mqttPresent = Object.prototype.hasOwnProperty.call(payload, \"mqtt\");\n\nmsg.payload = {\n    wifi: !!payload.wifi,\n    mqtt: mqttPresent ? !!payload.mqtt : true,\n    board12: normalizeBoard(payload.board12),\n    board13: normalizeBoard(payload.board13),\n    seal: safeObject(payload.seal),\n    common_cycle: safeObject(payload.common_cycle),\n    otvod_cycle: safeObject(payload.otvod_cycle),\n    devices: safeObject(payload.devices),\n    rs485_online: Number(payload.rs485_online ?? 0),\n    cmd_seq: Number(payload.cmd_seq ?? 0),\n    last_cmd: String(payload.last_cmd ?? \"\"),\n    receivedAt: new Date().toISOString()\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 140,
+        "wires": [
+            [
+                "debug_status_parsed_minimal",
+                "func_operator_model_minimal",
+                "func_operator_controls_model_minimal"
+            ]
+        ]
     },
     {
-        "id":  "debug_status_raw_minimal",
-        "type":  "debug",
-        "z":  "tab_master_com12_minimal",
-        "name":  "status raw",
-        "active":  true,
-        "tosidebar":  true,
-        "console":  true,
-        "tostatus":  false,
-        "complete":  "payload",
-        "targetType":  "msg",
-        "statusVal":  "",
-        "statusType":  "auto",
-        "x":  390,
-        "y":  100,
-        "wires":  [
-
-                  ]
+        "id": "debug_status_raw_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "status raw",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 390,
+        "y": 100,
+        "wires": []
     },
     {
-        "id":  "debug_status_parsed_minimal",
-        "type":  "debug",
-        "z":  "tab_master_com12_minimal",
-        "name":  "status parsed boards",
-        "active":  true,
-        "tosidebar":  true,
-        "console":  true,
-        "tostatus":  false,
-        "complete":  "payload",
-        "targetType":  "msg",
-        "statusVal":  "",
-        "statusType":  "auto",
-        "x":  670,
-        "y":  140,
-        "wires":  [
-
-                  ]
+        "id": "debug_status_parsed_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "status parsed boards",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 670,
+        "y": 140,
+        "wires": []
     },
     {
-        "id":  "mqtt_in_master_online_minimal",
-        "type":  "mqtt in",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Присутствие master",
-        "topic":  "fyl/master_com12/online",
-        "qos":  "0",
-        "datatype":  "auto-detect",
-        "broker":  "mqtt_broker_master1884_minimal",
-        "nl":  false,
-        "rap":  true,
-        "rh":  0,
-        "inputs":  0,
-        "x":  150,
-        "y":  240,
-        "wires":  [
-                      [
-                          "debug_online_raw_minimal",
-                          "func_parse_online_minimal",
-                          "func_operator_mqtt_log_capture"
-                      ]
-                  ]
+        "id": "mqtt_in_master_online_minimal",
+        "type": "mqtt in",
+        "z": "tab_master_com12_minimal",
+        "name": "Присутствие master",
+        "topic": "fyl/master_com12/online",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker_master1884_minimal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 240,
+        "wires": [
+            [
+                "debug_online_raw_minimal",
+                "func_parse_online_minimal"
+            ]
+        ]
     },
     {
-        "id":  "mqtt_in_master_resp_minimal",
-        "type":  "mqtt in",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Ответы master",
-        "topic":  "fyl/master_com12/resp",
-        "qos":  "0",
-        "datatype":  "auto-detect",
-        "broker":  "mqtt_broker_master1884_minimal",
-        "nl":  false,
-        "rap":  true,
-        "rh":  0,
-        "inputs":  0,
-        "x":  150,
-        "y":  300,
-        "wires":  [
-                      [
-                          "debug_resp_raw_minimal",
-                          "func_operator_mqtt_log_capture"
-                      ]
-                  ]
+        "id": "mqtt_in_master_resp_minimal",
+        "type": "mqtt in",
+        "z": "tab_master_com12_minimal",
+        "name": "Ответы master",
+        "topic": "fyl/master_com12/resp",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker_master1884_minimal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 300,
+        "wires": [
+            [
+                "debug_resp_raw_minimal"
+            ]
+        ]
     },
     {
-        "id":  "debug_resp_raw_minimal",
-        "type":  "debug",
-        "z":  "tab_master_com12_minimal",
-        "name":  "resp raw",
-        "active":  true,
-        "tosidebar":  true,
-        "console":  true,
-        "tostatus":  false,
-        "complete":  "payload",
-        "targetType":  "msg",
-        "statusVal":  "",
-        "statusType":  "auto",
-        "x":  390,
-        "y":  300,
-        "wires":  [
-
-                  ]
+        "id": "debug_resp_raw_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "resp raw",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 390,
+        "y": 300,
+        "wires": []
     },
     {
-        "id":  "func_parse_online_minimal",
-        "type":  "function",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Разбор online",
-        "func":  "const rawValue = msg.payload;\nconst text = String(rawValue ?? \"\").trim().toLowerCase();\nmsg.payload = {\n    online: text === \"online\" || text === \"true\" || text === \"1\",\n    normalized: text,\n    raw: rawValue,\n    receivedAt: new Date().toISOString()\n};\nreturn msg;",
-        "outputs":  1,
-        "timeout":  "",
-        "noerr":  0,
-        "initialize":  "",
-        "finalize":  "",
-        "libs":  [
-
-                 ],
-        "x":  400,
-        "y":  240,
-        "wires":  [
-                      [
-                          "debug_online_parsed_minimal",
-                          "func_operator_model_minimal"
-                      ]
-                  ]
+        "id": "func_parse_online_minimal",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "name": "Разбор online",
+        "func": "const rawValue = msg.payload;\nconst text = String(rawValue ?? \"\").trim().toLowerCase();\nmsg.payload = {\n    online: text === \"online\" || text === \"true\" || text === \"1\",\n    normalized: text,\n    raw: rawValue,\n    receivedAt: new Date().toISOString()\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 240,
+        "wires": [
+            [
+                "debug_online_parsed_minimal",
+                "func_operator_model_minimal",
+                "func_operator_controls_model_minimal"
+            ]
+        ]
     },
     {
-        "id":  "debug_online_raw_minimal",
-        "type":  "debug",
-        "z":  "tab_master_com12_minimal",
-        "name":  "online raw",
-        "active":  true,
-        "tosidebar":  true,
-        "console":  true,
-        "tostatus":  false,
-        "complete":  "payload",
-        "targetType":  "msg",
-        "statusVal":  "",
-        "statusType":  "auto",
-        "x":  380,
-        "y":  200,
-        "wires":  [
-
-                  ]
+        "id": "debug_online_raw_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "online raw",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 380,
+        "y": 200,
+        "wires": []
     },
     {
-        "id":  "debug_online_parsed_minimal",
-        "type":  "debug",
-        "z":  "tab_master_com12_minimal",
-        "name":  "online parsed",
-        "active":  true,
-        "tosidebar":  true,
-        "console":  true,
-        "tostatus":  false,
-        "complete":  "payload",
-        "targetType":  "msg",
-        "statusVal":  "",
-        "statusType":  "auto",
-        "x":  660,
-        "y":  240,
-        "wires":  [
-
-                  ]
+        "id": "debug_online_parsed_minimal",
+        "type": "debug",
+        "z": "tab_master_com12_minimal",
+        "name": "online parsed",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 660,
+        "y": 240,
+        "wires": []
     },
     {
-        "id":  "comment_dashboard_master_com12_minimal",
-        "type":  "comment",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Ссылка dashboard",
-        "info":  "Операторские страницы: /dashboard/master-com12 и /dashboard/master-com12-operator",
-        "x":  160,
-        "y":  340,
-        "wires":  [
-
-                  ]
+        "id": "comment_dashboard_master_com12_minimal",
+        "type": "comment",
+        "z": "tab_master_com12_minimal",
+        "name": "Ссылка dashboard",
+        "info": "Операторские страницы: /dashboard/master-com12 и /dashboard/master-com12-operator",
+        "x": 160,
+        "y": 340,
+        "wires": []
     },
     {
-        "id":  "inject_operator_init_minimal",
-        "type":  "inject",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Инициализация экрана",
-        "props":  [
-                      {
-                          "p":  "payload"
-                      },
-                      {
-                          "p":  "topic",
-                          "vt":  "str"
-                      }
-                  ],
-        "repeat":  "",
-        "crontab":  "",
-        "once":  true,
-        "onceDelay":  "0.5",
-        "topic":  "operator/init",
-        "payload":  "{}",
-        "payloadType":  "json",
-        "x":  160,
-        "y":  400,
-        "wires":  [
-                      [
-                          "func_operator_model_minimal",
-                          "func_operator_controls_model_minimal",
-                          "func_operator_mqtt_log_control"
-                      ]
-                  ]
+        "id": "inject_operator_init_minimal",
+        "type": "inject",
+        "z": "tab_master_com12_minimal",
+        "name": "Инициализация экрана",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "0.5",
+        "topic": "operator/init",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 160,
+        "y": 400,
+        "wires": [
+            [
+                "func_operator_model_minimal",
+                "func_operator_controls_model_minimal"
+            ]
+        ]
     },
     {
-        "id":  "func_operator_model_minimal",
-        "type":  "function",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Модель экрана",
-        "func":  "let state = flow.get(\"masterOperatorState\");\nif (!state) {\n    state = {\n        board12: \"unknown\",\n        board13: \"unknown\",\n        wifi: \"unknown\",\n        mqtt: \"unknown\",\n        masterOnline: \"unknown\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nfunction normalizeStatus(value) {\n    if (value === true) return \"online\";\n    if (value === false) return \"offline\";\n\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\" || text === \"1\" || text === \"true\") return \"online\";\n    if (text === \"offline\" || text === \"0\" || text === \"false\") return \"offline\";\n    return \"unknown\";\n}\n\nfunction describeStatus(kind, value, title, hint) {\n    const normalized = normalizeStatus(value);\n    let text = \"Нет данных\";\n\n    if (kind === \"master\") {\n        if (normalized === \"online\") text = \"На связи\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    } else if (kind === \"service\") {\n        if (normalized === \"online\") text = \"Подключено\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    } else {\n        if (normalized === \"online\") text = \"В сети\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    }\n\n    return {\n        key: normalized,\n        text,\n        title,\n        hint\n    };\n}\n\nconst payload = msg.payload;\nif (payload \u0026\u0026 typeof payload === \"object\") {\n    if (Object.prototype.hasOwnProperty.call(payload, \"board12\")) {\n        state.board12 = normalizeStatus(payload.board12);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"board13\")) {\n        state.board13 = normalizeStatus(payload.board13);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"wifi\")) {\n        state.wifi = normalizeStatus(payload.wifi);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"mqtt\")) {\n        state.mqtt = normalizeStatus(payload.mqtt);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"online\")) {\n        state.masterOnline = normalizeStatus(payload.online);\n    }\n}\n\nif (msg.topic !== \"operator/init\") {\n    state.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\n}\n\nflow.set(\"masterOperatorState\", state);\n\nconst model = {\n    title: \"Мастер COM12\",\n    subtitle: \"Минимальный транспортный контур через MQTT и I2C\",\n    master: describeStatus(\"master\", state.masterOnline, \"Мастер\", \"Текущее присутствие master_com12\"),\n    wifi: describeStatus(\"service\", state.wifi, \"Wi-Fi\", \"Связь платы с локальной сетью\"),\n    mqtt: describeStatus(\"service\", state.mqtt, \"MQTT\", \"Связь платы с брокером Mosquitto\"),\n    board12: describeStatus(\"board\", state.board12, \"Плата 12\", \"Статус платы 12 по опросу master\"),\n    board13: describeStatus(\"board\", state.board13, \"Плата 13\", \"Статус платы 13 по опросу master\"),\n    lastUpdate: state.lastUpdate,\n    topics: [\n        \"fyl/master_com12/status\",\n        \"fyl/master_com12/online\"\n    ],\n    note: \"Экран обновляется автоматически при новых сообщениях status и online. Если статусы замерли, сначала проверяй MQTT и последнее время обновления.\"\n};\n\nfunction makeMsg(payload) {\n    return { payload };\n}\n\nreturn [\n    makeMsg(model),\n    makeMsg(model),\n    makeMsg(model)\n];",
-        "outputs":  3,
-        "timeout":  "",
-        "noerr":  0,
-        "initialize":  "",
-        "finalize":  "",
-        "libs":  [
-
-                 ],
-        "x":  420,
-        "y":  400,
-        "wires":  [
-                      [
-                          "ui_template_summary_minimal"
-                      ],
-                      [
-                          "ui_template_boards_minimal"
-                      ],
-                      [
-                          "ui_template_diagnostics_minimal"
-                      ]
-                  ]
+        "id": "func_operator_model_minimal",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "name": "Модель экрана",
+        "func": "let state = flow.get(\"masterOperatorState\");\nif (!state) {\n    state = {\n        board12: \"unknown\",\n        board13: \"unknown\",\n        wifi: \"unknown\",\n        mqtt: \"unknown\",\n        masterOnline: \"unknown\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nfunction normalizeStatus(value) {\n    if (value === true) return \"online\";\n    if (value === false) return \"offline\";\n\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\" || text === \"1\" || text === \"true\") return \"online\";\n    if (text === \"offline\" || text === \"0\" || text === \"false\") return \"offline\";\n    return \"unknown\";\n}\n\nfunction describeStatus(kind, value, title, hint) {\n    const normalized = normalizeStatus(value);\n    let text = \"Нет данных\";\n\n    if (kind === \"master\") {\n        if (normalized === \"online\") text = \"На связи\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    } else if (kind === \"service\") {\n        if (normalized === \"online\") text = \"Подключено\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    } else {\n        if (normalized === \"online\") text = \"В сети\";\n        if (normalized === \"offline\") text = \"Нет связи\";\n    }\n\n    return {\n        key: normalized,\n        text,\n        title,\n        hint\n    };\n}\n\nconst payload = msg.payload;\nif (payload && typeof payload === \"object\") {\n    if (Object.prototype.hasOwnProperty.call(payload, \"board12\")) {\n        state.board12 = normalizeStatus(payload.board12);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"board13\")) {\n        state.board13 = normalizeStatus(payload.board13);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"wifi\")) {\n        state.wifi = normalizeStatus(payload.wifi);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"mqtt\")) {\n        state.mqtt = normalizeStatus(payload.mqtt);\n    }\n    if (Object.prototype.hasOwnProperty.call(payload, \"online\")) {\n        state.masterOnline = normalizeStatus(payload.online);\n    }\n}\n\nif (msg.topic !== \"operator/init\") {\n    state.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\n}\n\nflow.set(\"masterOperatorState\", state);\n\nconst model = {\n    title: \"Мастер COM12\",\n    subtitle: \"Минимальный транспортный контур через MQTT и I2C\",\n    master: describeStatus(\"master\", state.masterOnline, \"Мастер\", \"Текущее присутствие master_com12\"),\n    wifi: describeStatus(\"service\", state.wifi, \"Wi-Fi\", \"Связь платы с локальной сетью\"),\n    mqtt: describeStatus(\"service\", state.mqtt, \"MQTT\", \"Связь платы с брокером Mosquitto\"),\n    board12: describeStatus(\"board\", state.board12, \"Плата 12\", \"Статус платы 12 по опросу master\"),\n    board13: describeStatus(\"board\", state.board13, \"Плата 13\", \"Статус платы 13 по опросу master\"),\n    lastUpdate: state.lastUpdate,\n    topics: [\n        \"fyl/master_com12/status\",\n        \"fyl/master_com12/online\"\n    ],\n    note: \"Экран обновляется автоматически при новых сообщениях status и online. Если статусы замерли, сначала проверяй MQTT и последнее время обновления.\"\n};\n\nfunction makeMsg(payload) {\n    return { payload };\n}\n\nreturn [\n    makeMsg(model),\n    makeMsg(model),\n    makeMsg(model)\n];",
+        "outputs": 3,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 400,
+        "wires": [
+            [
+                "ui_template_summary_minimal"
+            ],
+            [
+                "ui_template_boards_minimal"
+            ],
+            [
+                "ui_template_diagnostics_minimal"
+            ]
+        ]
     },
     {
-        "id":  "ui_base_master_com12_minimal",
-        "type":  "ui-base",
-        "name":  "Операторская панель master_com12",
-        "path":  "/dashboard",
-        "appIcon":  "",
-        "includeClientData":  true,
-        "acceptsClientConfig":  [
-                                    "ui-notification",
-                                    "ui-control"
-                                ],
-        "showPathInSidebar":  false,
-        "headerContent":  "page",
-        "navigationStyle":  "default",
-        "titleBarStyle":  "default",
-        "showReconnectNotification":  true,
-        "notificationDisplayTime":  1,
-        "showDisconnectNotification":  true,
-        "allowInstall":  false
+        "id": "ui_base_master_com12_minimal",
+        "type": "ui-base",
+        "name": "Операторская панель master_com12",
+        "path": "/dashboard",
+        "appIcon": "",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "headerContent": "page",
+        "navigationStyle": "default",
+        "titleBarStyle": "default",
+        "showReconnectNotification": true,
+        "notificationDisplayTime": 1,
+        "showDisconnectNotification": true,
+        "allowInstall": false
     },
     {
-        "id":  "ui_theme_master_com12_minimal",
-        "type":  "ui-theme",
-        "name":  "Тема master_com12",
-        "colors":  {
-                       "surface":  "#fffaf2",
-                       "primary":  "#0d6b57",
-                       "bgPage":  "#f0ebe2",
-                       "groupBg":  "#fffdf9",
-                       "groupOutline":  "#d8cfc0"
-                   },
-        "sizes":  {
-                      "density":  "comfortable",
-                      "pagePadding":  "16px",
-                      "groupGap":  "14px",
-                      "groupBorderRadius":  "18px",
-                      "widgetGap":  "10px"
-                  }
+        "id": "ui_theme_master_com12_minimal",
+        "type": "ui-theme",
+        "name": "Тема master_com12",
+        "colors": {
+            "surface": "#fffaf2",
+            "primary": "#0d6b57",
+            "bgPage": "#f0ebe2",
+            "groupBg": "#fffdf9",
+            "groupOutline": "#d8cfc0"
+        },
+        "sizes": {
+            "density": "comfortable",
+            "pagePadding": "16px",
+            "groupGap": "14px",
+            "groupBorderRadius": "18px",
+            "widgetGap": "10px"
+        }
     },
     {
-        "id":  "ui_page_master_com12_minimal",
-        "type":  "ui-page",
-        "ui":  "ui_base_master_com12_minimal",
-        "name":  "Мастер COM12",
-        "path":  "/master-com12",
-        "icon":  "dashboard",
-        "layout":  "grid",
-        "theme":  "ui_theme_master_com12_minimal",
-        "order":  0,
-        "className":  "page-master-com12",
-        "visible":  "true",
-        "disabled":  "false",
-        "breakpoints":  [
-                            {
-                                "name":  "Default",
-                                "px":  0,
-                                "cols":  3
-                            },
-                            {
-                                "name":  "Tablet",
-                                "px":  576,
-                                "cols":  6
-                            },
-                            {
-                                "name":  "Small Desktop",
-                                "px":  768,
-                                "cols":  9
-                            },
-                            {
-                                "name":  "Desktop",
-                                "px":  1024,
-                                "cols":  12
-                            }
-                        ]
+        "id": "ui_page_master_com12_minimal",
+        "type": "ui-page",
+        "ui": "ui_base_master_com12_minimal",
+        "name": "Мастер COM12",
+        "path": "/master-com12",
+        "icon": "dashboard",
+        "layout": "grid",
+        "theme": "ui_theme_master_com12_minimal",
+        "order": 0,
+        "className": "page-master-com12",
+        "visible": "true",
+        "disabled": "false",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": 0,
+                "cols": 3
+            },
+            {
+                "name": "Tablet",
+                "px": 576,
+                "cols": 6
+            },
+            {
+                "name": "Small Desktop",
+                "px": 768,
+                "cols": 9
+            },
+            {
+                "name": "Desktop",
+                "px": 1024,
+                "cols": 12
+            }
+        ]
     },
     {
-        "id":  "ui_group_summary_master_com12",
-        "type":  "ui-group",
-        "page":  "ui_page_master_com12_minimal",
-        "name":  "Общий обзор",
-        "width":  12,
-        "height":  1,
-        "order":  0,
-        "showTitle":  false,
-        "visible":  true,
-        "disabled":  false,
-        "className":  "group-hero",
-        "groupType":  "default"
+        "id": "ui_group_summary_master_com12",
+        "type": "ui-group",
+        "page": "ui_page_master_com12_minimal",
+        "name": "Общий обзор",
+        "width": 12,
+        "height": 1,
+        "order": 0,
+        "showTitle": false,
+        "visible": true,
+        "disabled": false,
+        "className": "group-hero",
+        "groupType": "default"
     },
     {
-        "id":  "ui_group_boards_master_com12",
-        "type":  "ui-group",
-        "page":  "ui_page_master_com12_minimal",
-        "name":  "Состояние плат",
-        "width":  12,
-        "height":  1,
-        "order":  1,
-        "showTitle":  true,
-        "visible":  true,
-        "disabled":  false,
-        "className":  "group-boards",
-        "groupType":  "default"
+        "id": "ui_group_boards_master_com12",
+        "type": "ui-group",
+        "page": "ui_page_master_com12_minimal",
+        "name": "Состояние плат",
+        "width": 12,
+        "height": 1,
+        "order": 1,
+        "showTitle": true,
+        "visible": true,
+        "disabled": false,
+        "className": "group-boards",
+        "groupType": "default"
     },
     {
-        "id":  "ui_group_diagnostics_master_com12",
-        "type":  "ui-group",
-        "page":  "ui_page_master_com12_minimal",
-        "name":  "Контур связи",
-        "width":  12,
-        "height":  1,
-        "order":  2,
-        "showTitle":  true,
-        "visible":  true,
-        "disabled":  false,
-        "className":  "group-diagnostics",
-        "groupType":  "default"
+        "id": "ui_group_diagnostics_master_com12",
+        "type": "ui-group",
+        "page": "ui_page_master_com12_minimal",
+        "name": "Контур связи",
+        "width": 12,
+        "height": 1,
+        "order": 2,
+        "showTitle": true,
+        "visible": true,
+        "disabled": false,
+        "className": "group-diagnostics",
+        "groupType": "default"
     },
     {
-        "id":  "ui_template_page_style_master_com12",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "",
-        "page":  "ui_page_master_com12_minimal",
-        "ui":  "",
-        "name":  "Стили страницы",
-        "order":  0,
-        "width":  0,
-        "height":  0,
-        "head":  "",
-        "format":  ".page-master-com12 {\n  background: #f3eee5;\n}\n\n.master-hero {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  background: linear-gradient(135deg, #f8f2e8 0%, #d9efe6 100%);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 24px;\n  box-shadow: 0 18px 40px rgba(40, 56, 49, 0.12);\n  color: #17352d;\n  padding: 24px;\n}\n\n.master-hero__header {\n  align-items: start;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 16px;\n  justify-content: space-between;\n}\n\n.master-eyebrow,\n.diag-card__eyebrow,\n.board-card__kicker {\n  color: #4e6a61;\n  font-size: 0.75rem;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.master-hero h2,\n.diag-card h3,\n.board-card__title {\n  margin: 0;\n}\n\n.master-hero h2 {\n  font-size: 2rem;\n  line-height: 1.1;\n  margin-top: 8px;\n}\n\n.master-hero p {\n  color: #456259;\n  font-size: 1rem;\n  margin: 10px 0 0;\n  max-width: 640px;\n}\n\n.master-timestamp {\n  background: rgba(255, 255, 255, 0.68);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 18px;\n  min-width: 220px;\n  padding: 14px 16px;\n}\n\n.master-timestamp span,\n.diag-list__label {\n  color: #5b7169;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 6px;\n}\n\n.master-timestamp strong {\n  font-size: 1.05rem;\n}\n\n.master-chip-grid,\n.board-grid {\n  display: grid;\n  gap: 14px;\n  margin-top: 18px;\n}\n\n.master-chip-grid {\n  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));\n}\n\n.board-grid {\n  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));\n}\n\n.master-chip-card,\n.board-card,\n.diag-card {\n  background: #fffdf9;\n  border: 1px solid #ddd4c6;\n  border-radius: 20px;\n  box-shadow: 0 10px 24px rgba(28, 36, 33, 0.07);\n}\n\n.master-chip-card {\n  padding: 16px 18px;\n}\n\n.master-chip-card__label {\n  color: #536b63;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 10px;\n}\n\n.master-chip {\n  align-items: center;\n  border-radius: 999px;\n  display: inline-flex;\n  font-size: 0.95rem;\n  font-weight: 700;\n  gap: 10px;\n  padding: 7px 14px;\n}\n\n.master-chip::before,\n.board-card__state::before {\n  background: currentColor;\n  border-radius: 50%;\n  content: \"\";\n  display: inline-block;\n  flex: 0 0 auto;\n}\n\n.master-chip::before {\n  height: 10px;\n  width: 10px;\n}\n\n.board-card {\n  padding: 20px;\n}\n\n.board-card__state {\n  align-items: center;\n  display: inline-flex;\n  font-size: 1.5rem;\n  font-weight: 700;\n  gap: 12px;\n  margin-top: 16px;\n}\n\n.board-card__state::before {\n  height: 12px;\n  width: 12px;\n}\n\n.board-card__hint {\n  color: #5c6f67;\n  margin: 14px 0 0;\n}\n\n.diag-card {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  padding: 20px;\n}\n\n.diag-card__header {\n  align-items: center;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 12px;\n  justify-content: space-between;\n}\n\n.diag-badge {\n  background: #e7f2ee;\n  border: 1px solid #b9d7cc;\n  border-radius: 999px;\n  color: #1d5f4d;\n  font-size: 0.82rem;\n  font-weight: 700;\n  padding: 6px 12px;\n}\n\n.diag-list {\n  display: grid;\n  gap: 12px;\n  list-style: none;\n  margin: 18px 0 0;\n  padding: 0;\n}\n\n.diag-list li {\n  background: #f7f2ea;\n  border-radius: 14px;\n  padding: 12px 14px;\n}\n\n.diag-topic {\n  background: #edf3f0;\n  border-radius: 10px;\n  color: #214e41;\n  display: inline-block;\n  font-family: Consolas, \"Courier New\", monospace;\n  font-size: 0.9rem;\n  margin-top: 4px;\n  padding: 4px 8px;\n}\n\n.diag-card__note {\n  color: #536961;\n  margin: 16px 0 0;\n}\n\n.is-online {\n  background: #e4f7eb;\n  border-color: #b8e1c6;\n  color: #0e7b56;\n}\n\n.is-offline {\n  background: #fde9e8;\n  border-color: #f2c2bf;\n  color: #bb4a43;\n}\n\n.is-unknown {\n  background: #f3efdf;\n  border-color: #ddd3a8;\n  color: #8d7425;\n}\n\n@media (max-width: 720px) {\n  .master-hero {\n    padding: 18px;\n  }\n\n  .master-hero h2 {\n    font-size: 1.6rem;\n  }\n\n  .master-timestamp {\n    width: 100%;\n  }\n}",
-        "storeOutMessages":  true,
-        "passthru":  true,
-        "resendOnRefresh":  true,
-        "templateScope":  "page:style",
-        "className":  "",
-        "x":  180,
-        "y":  500,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
+        "id": "ui_template_page_style_master_com12",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "",
+        "page": "ui_page_master_com12_minimal",
+        "ui": "",
+        "name": "Стили страницы",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": ".page-master-com12 {\n  background: #f3eee5;\n}\n\n.master-hero {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  background: linear-gradient(135deg, #f8f2e8 0%, #d9efe6 100%);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 24px;\n  box-shadow: 0 18px 40px rgba(40, 56, 49, 0.12);\n  color: #17352d;\n  padding: 24px;\n}\n\n.master-hero__header {\n  align-items: start;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 16px;\n  justify-content: space-between;\n}\n\n.master-eyebrow,\n.diag-card__eyebrow,\n.board-card__kicker {\n  color: #4e6a61;\n  font-size: 0.75rem;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.master-hero h2,\n.diag-card h3,\n.board-card__title {\n  margin: 0;\n}\n\n.master-hero h2 {\n  font-size: 2rem;\n  line-height: 1.1;\n  margin-top: 8px;\n}\n\n.master-hero p {\n  color: #456259;\n  font-size: 1rem;\n  margin: 10px 0 0;\n  max-width: 640px;\n}\n\n.master-timestamp {\n  background: rgba(255, 255, 255, 0.68);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 18px;\n  min-width: 220px;\n  padding: 14px 16px;\n}\n\n.master-timestamp span,\n.diag-list__label {\n  color: #5b7169;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 6px;\n}\n\n.master-timestamp strong {\n  font-size: 1.05rem;\n}\n\n.master-chip-grid,\n.board-grid {\n  display: grid;\n  gap: 14px;\n  margin-top: 18px;\n}\n\n.master-chip-grid {\n  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));\n}\n\n.board-grid {\n  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));\n}\n\n.master-chip-card,\n.board-card,\n.diag-card {\n  background: #fffdf9;\n  border: 1px solid #ddd4c6;\n  border-radius: 20px;\n  box-shadow: 0 10px 24px rgba(28, 36, 33, 0.07);\n}\n\n.master-chip-card {\n  padding: 16px 18px;\n}\n\n.master-chip-card__label {\n  color: #536b63;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 10px;\n}\n\n.master-chip {\n  align-items: center;\n  border-radius: 999px;\n  display: inline-flex;\n  font-size: 0.95rem;\n  font-weight: 700;\n  gap: 10px;\n  padding: 7px 14px;\n}\n\n.master-chip::before,\n.board-card__state::before {\n  background: currentColor;\n  border-radius: 50%;\n  content: \"\";\n  display: inline-block;\n  flex: 0 0 auto;\n}\n\n.master-chip::before {\n  height: 10px;\n  width: 10px;\n}\n\n.board-card {\n  padding: 20px;\n}\n\n.board-card__state {\n  align-items: center;\n  display: inline-flex;\n  font-size: 1.5rem;\n  font-weight: 700;\n  gap: 12px;\n  margin-top: 16px;\n}\n\n.board-card__state::before {\n  height: 12px;\n  width: 12px;\n}\n\n.board-card__hint {\n  color: #5c6f67;\n  margin: 14px 0 0;\n}\n\n.diag-card {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  padding: 20px;\n}\n\n.diag-card__header {\n  align-items: center;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 12px;\n  justify-content: space-between;\n}\n\n.diag-badge {\n  background: #e7f2ee;\n  border: 1px solid #b9d7cc;\n  border-radius: 999px;\n  color: #1d5f4d;\n  font-size: 0.82rem;\n  font-weight: 700;\n  padding: 6px 12px;\n}\n\n.diag-list {\n  display: grid;\n  gap: 12px;\n  list-style: none;\n  margin: 18px 0 0;\n  padding: 0;\n}\n\n.diag-list li {\n  background: #f7f2ea;\n  border-radius: 14px;\n  padding: 12px 14px;\n}\n\n.diag-topic {\n  background: #edf3f0;\n  border-radius: 10px;\n  color: #214e41;\n  display: inline-block;\n  font-family: Consolas, \"Courier New\", monospace;\n  font-size: 0.9rem;\n  margin-top: 4px;\n  padding: 4px 8px;\n}\n\n.diag-card__note {\n  color: #536961;\n  margin: 16px 0 0;\n}\n\n.is-online {\n  background: #e4f7eb;\n  border-color: #b8e1c6;\n  color: #0e7b56;\n}\n\n.is-offline {\n  background: #fde9e8;\n  border-color: #f2c2bf;\n  color: #bb4a43;\n}\n\n.is-unknown {\n  background: #f3efdf;\n  border-color: #ddd3a8;\n  color: #8d7425;\n}\n\n@media (max-width: 720px) {\n  .master-hero {\n    padding: 18px;\n  }\n\n  .master-hero h2 {\n    font-size: 1.6rem;\n  }\n\n  .master-timestamp {\n    width: 100%;\n  }\n}",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "page:style",
+        "className": "",
+        "x": 180,
+        "y": 500,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "ui_template_summary_minimal",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_summary_master_com12",
-        "page":  "",
-        "ui":  "",
-        "name":  "Главный экран",
-        "order":  0,
-        "width":  12,
-        "height":  0,
-        "head":  "",
-        "format":  "\u003ctemplate\u003e\n  \u003cdiv v-if=\"msg \u0026\u0026 msg.payload\" class=\"master-hero\"\u003e\n    \u003cdiv class=\"master-hero__header\"\u003e\n      \u003cdiv\u003e\n        \u003cdiv class=\"master-eyebrow\"\u003eОператорская панель\u003c/div\u003e\n        \u003ch2\u003e{{ msg.payload.title }}\u003c/h2\u003e\n        \u003cp\u003e{{ msg.payload.subtitle }}\u003c/p\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"master-timestamp\"\u003e\n        \u003cspan\u003eПоследнее обновление\u003c/span\u003e\n        \u003cstrong\u003e{{ msg.payload.lastUpdate }}\u003c/strong\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"master-chip-grid\"\u003e\n      \u003cdiv class=\"master-chip-card\"\u003e\n        \u003cspan class=\"master-chip-card__label\"\u003eМастер\u003c/span\u003e\n        \u003cspan class=\"master-chip\" :class=\"\u0027is-\u0027 + msg.payload.master.key\"\u003e{{ msg.payload.master.text }}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"master-chip-card\"\u003e\n        \u003cspan class=\"master-chip-card__label\"\u003eWi-Fi\u003c/span\u003e\n        \u003cspan class=\"master-chip\" :class=\"\u0027is-\u0027 + msg.payload.wifi.key\"\u003e{{ msg.payload.wifi.text }}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"master-chip-card\"\u003e\n        \u003cspan class=\"master-chip-card__label\"\u003eMQTT\u003c/span\u003e\n        \u003cspan class=\"master-chip\" :class=\"\u0027is-\u0027 + msg.payload.mqtt.key\"\u003e{{ msg.payload.mqtt.text }}\u003c/span\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n  \u003c/div\u003e\n\u003c/template\u003e",
-        "storeOutMessages":  true,
-        "passthru":  false,
-        "resendOnRefresh":  true,
-        "templateScope":  "local",
-        "className":  "",
-        "x":  710,
-        "y":  380,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
+        "id": "ui_template_summary_minimal",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_summary_master_com12",
+        "page": "",
+        "ui": "",
+        "name": "Главный экран",
+        "order": 0,
+        "width": 12,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n  <div v-if=\"msg && msg.payload\" class=\"master-hero\">\n    <div class=\"master-hero__header\">\n      <div>\n        <div class=\"master-eyebrow\">Операторская панель</div>\n        <h2>{{ msg.payload.title }}</h2>\n        <p>{{ msg.payload.subtitle }}</p>\n      </div>\n      <div class=\"master-timestamp\">\n        <span>Последнее обновление</span>\n        <strong>{{ msg.payload.lastUpdate }}</strong>\n      </div>\n    </div>\n\n    <div class=\"master-chip-grid\">\n      <div class=\"master-chip-card\">\n        <span class=\"master-chip-card__label\">Мастер</span>\n        <span class=\"master-chip\" :class=\"'is-' + msg.payload.master.key\">{{ msg.payload.master.text }}</span>\n      </div>\n      <div class=\"master-chip-card\">\n        <span class=\"master-chip-card__label\">Wi-Fi</span>\n        <span class=\"master-chip\" :class=\"'is-' + msg.payload.wifi.key\">{{ msg.payload.wifi.text }}</span>\n      </div>\n      <div class=\"master-chip-card\">\n        <span class=\"master-chip-card__label\">MQTT</span>\n        <span class=\"master-chip\" :class=\"'is-' + msg.payload.mqtt.key\">{{ msg.payload.mqtt.text }}</span>\n      </div>\n    </div>\n  </div>\n</template>",
+        "storeOutMessages": true,
+        "passthru": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 710,
+        "y": 380,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "ui_template_boards_minimal",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_boards_master_com12",
-        "page":  "",
-        "ui":  "",
-        "name":  "Карточки плат",
-        "order":  0,
-        "width":  12,
-        "height":  0,
-        "head":  "",
-        "format":  "\u003ctemplate\u003e\n  \u003cdiv v-if=\"msg \u0026\u0026 msg.payload\" class=\"board-grid\"\u003e\n    \u003carticle class=\"board-card\" :class=\"\u0027is-\u0027 + msg.payload.board12.key\"\u003e\n      \u003cdiv class=\"board-card__kicker\"\u003eКонтроллер линии\u003c/div\u003e\n      \u003ch3 class=\"board-card__title\"\u003e{{ msg.payload.board12.title }}\u003c/h3\u003e\n      \u003cdiv class=\"board-card__state\"\u003e{{ msg.payload.board12.text }}\u003c/div\u003e\n      \u003cp class=\"board-card__hint\"\u003e{{ msg.payload.board12.hint }}\u003c/p\u003e\n    \u003c/article\u003e\n\n    \u003carticle class=\"board-card\" :class=\"\u0027is-\u0027 + msg.payload.board13.key\"\u003e\n      \u003cdiv class=\"board-card__kicker\"\u003eКонтроллер линии\u003c/div\u003e\n      \u003ch3 class=\"board-card__title\"\u003e{{ msg.payload.board13.title }}\u003c/h3\u003e\n      \u003cdiv class=\"board-card__state\"\u003e{{ msg.payload.board13.text }}\u003c/div\u003e\n      \u003cp class=\"board-card__hint\"\u003e{{ msg.payload.board13.hint }}\u003c/p\u003e\n    \u003c/article\u003e\n  \u003c/div\u003e\n\u003c/template\u003e",
-        "storeOutMessages":  true,
-        "passthru":  false,
-        "resendOnRefresh":  true,
-        "templateScope":  "local",
-        "className":  "",
-        "x":  710,
-        "y":  420,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
+        "id": "ui_template_boards_minimal",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_boards_master_com12",
+        "page": "",
+        "ui": "",
+        "name": "Карточки плат",
+        "order": 0,
+        "width": 12,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n  <div v-if=\"msg && msg.payload\" class=\"board-grid\">\n    <article class=\"board-card\" :class=\"'is-' + msg.payload.board12.key\">\n      <div class=\"board-card__kicker\">Контроллер линии</div>\n      <h3 class=\"board-card__title\">{{ msg.payload.board12.title }}</h3>\n      <div class=\"board-card__state\">{{ msg.payload.board12.text }}</div>\n      <p class=\"board-card__hint\">{{ msg.payload.board12.hint }}</p>\n    </article>\n\n    <article class=\"board-card\" :class=\"'is-' + msg.payload.board13.key\">\n      <div class=\"board-card__kicker\">Контроллер линии</div>\n      <h3 class=\"board-card__title\">{{ msg.payload.board13.title }}</h3>\n      <div class=\"board-card__state\">{{ msg.payload.board13.text }}</div>\n      <p class=\"board-card__hint\">{{ msg.payload.board13.hint }}</p>\n    </article>\n  </div>\n</template>",
+        "storeOutMessages": true,
+        "passthru": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 710,
+        "y": 420,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "ui_template_diagnostics_minimal",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_diagnostics_master_com12",
-        "page":  "",
-        "ui":  "",
-        "name":  "Контур связи",
-        "order":  0,
-        "width":  12,
-        "height":  0,
-        "head":  "",
-        "format":  "\u003ctemplate\u003e\n  \u003cdiv v-if=\"msg \u0026\u0026 msg.payload\" class=\"diag-card\"\u003e\n    \u003cdiv class=\"diag-card__header\"\u003e\n      \u003cdiv\u003e\n        \u003cdiv class=\"diag-card__eyebrow\"\u003eКонтур связи\u003c/div\u003e\n        \u003ch3\u003eЧто сейчас читает экран\u003c/h3\u003e\n      \u003c/div\u003e\n      \u003cspan class=\"diag-badge\"\u003eMQTT 1885\u003c/span\u003e\n    \u003c/div\u003e\n\n    \u003cul class=\"diag-list\"\u003e\n      \u003cli\u003e\n        \u003cspan class=\"diag-list__label\"\u003eТопик статуса\u003c/span\u003e\n        \u003ccode class=\"diag-topic\"\u003e{{ msg.payload.topics[0] }}\u003c/code\u003e\n      \u003c/li\u003e\n      \u003cli\u003e\n        \u003cspan class=\"diag-list__label\"\u003eТопик присутствия\u003c/span\u003e\n        \u003ccode class=\"diag-topic\"\u003e{{ msg.payload.topics[1] }}\u003c/code\u003e\n      \u003c/li\u003e\n    \u003c/ul\u003e\n\n    \u003cp class=\"diag-card__note\"\u003e{{ msg.payload.note }}\u003c/p\u003e\n  \u003c/div\u003e\n\u003c/template\u003e",
-        "storeOutMessages":  true,
-        "passthru":  false,
-        "resendOnRefresh":  true,
-        "templateScope":  "local",
-        "className":  "",
-        "x":  720,
-        "y":  460,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
+        "id": "ui_template_diagnostics_minimal",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_diagnostics_master_com12",
+        "page": "",
+        "ui": "",
+        "name": "Контур связи",
+        "order": 0,
+        "width": 12,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n  <div v-if=\"msg && msg.payload\" class=\"diag-card\">\n    <div class=\"diag-card__header\">\n      <div>\n        <div class=\"diag-card__eyebrow\">Контур связи</div>\n        <h3>Что сейчас читает экран</h3>\n      </div>\n      <span class=\"diag-badge\">MQTT 1885</span>\n    </div>\n\n    <ul class=\"diag-list\">\n      <li>\n        <span class=\"diag-list__label\">Топик статуса</span>\n        <code class=\"diag-topic\">{{ msg.payload.topics[0] }}</code>\n      </li>\n      <li>\n        <span class=\"diag-list__label\">Топик присутствия</span>\n        <code class=\"diag-topic\">{{ msg.payload.topics[1] }}</code>\n      </li>\n    </ul>\n\n    <p class=\"diag-card__note\">{{ msg.payload.note }}</p>\n  </div>\n</template>",
+        "storeOutMessages": true,
+        "passthru": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 720,
+        "y": 460,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "func_operator_controls_model_minimal",
-        "type":  "function",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Модель вкладки управления",
-        "func":  "let state = flow.get(\"masterOperatorControlsState\");\nif (!state) {\n    state = {\n        commonActive: null,\n        pauseRequested: null,\n        pauseState: \"-\",\n        stage: \"-\",\n        last: \"Ожидание статуса мастера\",\n        sealerDonePendingUnload: null,\n        sealOnline: null,\n        sealBusy: null,\n        sealDone: null,\n        sealStartOut: null,\n        sealCompletionSeq: 0,\n        sealPulseMs: 0,\n        cmdSeq: 0,\n        lastCmd: \"—\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nfunction hasOwn(obj, key) {\n    return Object.prototype.hasOwnProperty.call(obj, key);\n}\n\nfunction normalizeTriState(value) {\n    if (value === true) return \"active\";\n    if (value === false) return \"inactive\";\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if ([\"true\", \"1\", \"yes\", \"online\", \"active\"].includes(text)) return \"active\";\n    if ([\"false\", \"0\", \"no\", \"offline\", \"inactive\"].includes(text)) return \"inactive\";\n    return \"unknown\";\n}\n\nfunction makeBadge(value, activeText, inactiveText, unknownText) {\n    const key = normalizeTriState(value);\n    let text = unknownText;\n    if (key === \"active\") text = activeText;\n    if (key === \"inactive\") text = inactiveText;\n    return { key, text };\n}\n\nconst payload = msg.payload;\nif (payload && typeof payload === \"object\") {\n    const common = payload.common_cycle;\n    if (common && typeof common === \"object\") {\n        if (hasOwn(common, \"active\")) state.commonActive = common.active;\n        if (hasOwn(common, \"pause\")) state.pauseRequested = common.pause;\n        if (hasOwn(common, \"pause_state\")) state.pauseState = String(common.pause_state || \"-\");\n        if (hasOwn(common, \"stage\")) state.stage = String(common.stage || \"-\");\n        if (hasOwn(common, \"last\")) state.last = String(common.last || \"-\");\n        if (hasOwn(common, \"sealer_done_pending_unload\")) state.sealerDonePendingUnload = common.sealer_done_pending_unload;\n    }\n\n    const seal = payload.seal;\n    if (seal && typeof seal === \"object\") {\n        if (hasOwn(seal, \"online\")) state.sealOnline = seal.online;\n        if (hasOwn(seal, \"busy\")) state.sealBusy = seal.busy;\n        if (hasOwn(seal, \"done\")) state.sealDone = seal.done;\n        if (hasOwn(seal, \"start_out\")) state.sealStartOut = seal.start_out;\n        if (hasOwn(seal, \"completion_seq\")) state.sealCompletionSeq = Number(seal.completion_seq || 0);\n        if (hasOwn(seal, \"pulse_ms\")) state.sealPulseMs = Number(seal.pulse_ms || 0);\n    }\n\n    if (hasOwn(payload, \"cmd_seq\")) state.cmdSeq = Number(payload.cmd_seq || 0);\n    if (hasOwn(payload, \"last_cmd\")) {\n        const lastCmd = String(payload.last_cmd || \"\").trim();\n        state.lastCmd = lastCmd || \"—\";\n    }\n}\n\nif (msg.topic !== \"operator/init\") {\n    state.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\n}\n\nflow.set(\"masterOperatorControlsState\", state);\n\nmsg.payload = {\n    title: \"Управление линией\",\n    subtitle: \"Команды отправляются мастеру COM12 через MQTT\",\n    commandTopic: \"fyl/master_com12/cmd\",\n    lastUpdate: state.lastUpdate,\n    cmdSeq: state.cmdSeq,\n    lastCmd: state.lastCmd,\n    common: {\n        active: makeBadge(state.commonActive, \"COMMON запущен\", \"COMMON остановлен\", \"COMMON: нет данных\"),\n        pause: makeBadge(state.pauseRequested, \"Пауза запрошена\", \"Пауза не запрошена\", \"Пауза: нет данных\"),\n        sealerPendingUnload: makeBadge(state.sealerDonePendingUnload, \"Ждет выгрузку из запайщика\", \"Выгрузка не ожидается\", \"Выгрузка: нет данных\"),\n        stage: state.stage,\n        pauseState: state.pauseState,\n        last: state.last\n    },\n    seal: {\n        online: makeBadge(state.sealOnline, \"COM10 на связи\", \"Нет связи с COM10\", \"Связь с COM10: нет данных\"),\n        busy: makeBadge(state.sealBusy, \"Ждет DONE / занят\", \"Свободен\", \"SEAL: нет данных\"),\n        done: makeBadge(state.sealDone, \"DONE active\", \"DONE inactive\", \"DONE: нет данных\"),\n        startOut: makeBadge(state.sealStartOut, \"START импульс идет\", \"START выключен\", \"START: нет данных\"),\n        completionSeq: state.sealCompletionSeq,\n        pulseMs: state.sealPulseMs\n    }\n};\n\nreturn msg;",
-        "outputs":  1,
-        "timeout":  "",
-        "noerr":  0,
-        "initialize":  "",
-        "finalize":  "",
-        "libs":  [
-
-                 ],
-        "x":  460,
-        "y":  560,
-        "wires":  [
-                      [
-                          "ui_template_operator_controls_summary",
-                          "ui_template_operator_seal_status"
-                      ]
-                  ]
+        "id": "func_operator_controls_model_minimal",
+        "type": "function",
+        "z": "tab_master_com12_minimal",
+        "name": "Модель вкладки управления",
+        "func": "let state = flow.get(\"masterOperatorControlsState\");\nif (!state) {\n    state = {\n        masterOnline: \"unknown\",\n        common: {},\n        seal: {},\n        otvod: {},\n        devices: {},\n        cmdSeq: 0,\n        lastCmd: \"—\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nfunction hasOwn(obj, key) {\n    return Object.prototype.hasOwnProperty.call(obj, key);\n}\n\nfunction safeObject(value) {\n    return value && typeof value === \"object\" ? value : {};\n}\n\nfunction toBool(value) {\n    if (value === true || value === false) return value;\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if ([\"true\", \"1\", \"yes\", \"online\", \"active\"].includes(text)) return true;\n    if ([\"false\", \"0\", \"no\", \"offline\", \"inactive\"].includes(text)) return false;\n    return null;\n}\n\nfunction toBoolWithDefault(value, fallback) {\n    const parsed = toBool(value);\n    return parsed === null ? fallback : parsed;\n}\n\nfunction toNumber(value, fallback = 0) {\n    const num = Number(value);\n    return Number.isFinite(num) ? num : fallback;\n}\n\nfunction normalizeMasterState(value) {\n    const parsed = toBool(value);\n    if (parsed === true) return \"online\";\n    if (parsed === false) return \"offline\";\n\n    const text = String(value ?? \"\").trim().toLowerCase();\n    if (text === \"online\") return \"online\";\n    if (text === \"offline\") return \"offline\";\n    return \"unknown\";\n}\n\nfunction stageText(stage) {\n    const key = String(stage || \"idle\");\n    if (key === \"wait_initial_batch\") return \"собираем первый блок\";\n    if (key === \"wait_manip_ready\") return \"ожидаем готовность манипулятора\";\n    if (key === \"wait_manip_step7\") return \"манипулятор в рабочем цикле\";\n    if (key === \"wait_next_batch\") return \"ожидаем следующий блок\";\n    return \"ожидание\";\n}\n\nfunction makeEntity(id, title, key, status, reason, hint) {\n    return {\n        id,\n        title,\n        key,\n        status,\n        reason,\n        hint: hint || \"\"\n    };\n}\n\nconst payload = msg.payload;\nif (payload && typeof payload === \"object\") {\n    if (hasOwn(payload, \"online\")) {\n        state.masterOnline = normalizeMasterState(payload.online);\n    }\n\n    if (payload.common_cycle && typeof payload.common_cycle === \"object\") {\n        state.common = payload.common_cycle;\n    }\n\n    if (payload.seal && typeof payload.seal === \"object\") {\n        state.seal = payload.seal;\n    }\n\n    if (payload.otvod_cycle && typeof payload.otvod_cycle === \"object\") {\n        state.otvod = payload.otvod_cycle;\n    }\n\n    if (payload.devices && typeof payload.devices === \"object\") {\n        state.devices = payload.devices;\n    }\n\n    if (hasOwn(payload, \"cmd_seq\")) {\n        state.cmdSeq = toNumber(payload.cmd_seq, 0);\n    }\n\n    if (hasOwn(payload, \"last_cmd\")) {\n        const cmd = String(payload.last_cmd || \"\").trim();\n        state.lastCmd = cmd || \"—\";\n    }\n}\n\nif (msg.topic !== \"operator/init\") {\n    state.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\n}\n\nflow.set(\"masterOperatorControlsState\", state);\n\nconst common = safeObject(state.common);\nconst seal = safeObject(state.seal);\nconst otvod = safeObject(state.otvod);\nconst devices = safeObject(state.devices);\nconst conveyor = safeObject(devices.conveyor);\nconst manip = safeObject(devices.manipulator);\n\nconst conveyorHasData = Object.keys(conveyor).length > 0;\nconst manipHasData = Object.keys(manip).length > 0;\nconst sealHasData = Object.keys(seal).length > 0;\nconst otvodHasData = Object.keys(otvod).length > 0;\n\nconst conveyorLinked = conveyorHasData && toBoolWithDefault(conveyor.online, false) &&\n    (hasOwn(conveyor, \"kind_ok\") ? toBoolWithDefault(conveyor.kind_ok, false) : true);\nconst manipLinked = manipHasData && toBoolWithDefault(manip.online, false) &&\n    (hasOwn(manip, \"kind_ok\") ? toBoolWithDefault(manip.kind_ok, false) : true);\nconst sealLinked = sealHasData && toBoolWithDefault(seal.online, false);\nconst outfeedLinked = (otvodHasData && toBoolWithDefault(otvod.online, false)) || conveyorLinked;\n\nconst manipBusy = toBoolWithDefault(manip.busy, false);\nconst manipAlarm = toBoolWithDefault(manip.alarm, false);\nconst manipReady = toBoolWithDefault(manip.work_start_ready, false);\nconst manipNeedsGripOpen = toBoolWithDefault(manip.needs_grip_open_only, false);\n\nlet manipEntity;\nif (!manipHasData) {\n    manipEntity = makeEntity(\"manipulator\", \"Манипулятор\", \"nodata\", \"Нет данных\", \"Нет снимка от манипулятора.\", \"\");\n} else if (!manipLinked) {\n    manipEntity = makeEntity(\"manipulator\", \"Манипулятор\", \"offline\", \"Нет связи\", \"Нет устойчивой связи с манипулятором.\", \"\");\n} else if (manipAlarm) {\n    manipEntity = makeEntity(\"manipulator\", \"Манипулятор\", \"alarm\", \"Авария\", \"На манипуляторе активна авария.\", \"\");\n} else if (manipBusy) {\n    manipEntity = makeEntity(\"manipulator\", \"Манипулятор\", \"work\", \"Работает\", \"Выполняет рабочий цикл.\", \"\");\n} else if (manipReady) {\n    manipEntity = makeEntity(\"manipulator\", \"Манипулятор\", \"ready\", \"Готов\", \"Готов к следующему запуску.\", \"\");\n} else {\n    const reason = manipNeedsGripOpen\n        ? \"Нужно подготовить захват перед стартом.\"\n        : \"Ожидает условия для следующего цикла.\";\n    manipEntity = makeEntity(\"manipulator\", \"Манипулятор\", \"wait\", \"Ждет\", reason, \"\");\n}\n\nconst batchReady = conveyorLinked && toBoolWithDefault(conveyor.batch_ready, false);\nconst feedSideEmptyValid = conveyorLinked && toBoolWithDefault(conveyor.feed_side_empty_valid, false);\nconst feedSideEmptyStrict = feedSideEmptyValid && toBoolWithDefault(conveyor.feed_side_empty_strict, true);\nconst feedSideCollecting = feedSideEmptyValid && !feedSideEmptyStrict;\nconst infeedProgramActive = conveyorLinked && toNumber(conveyor.program_state, 0) > 0;\nconst infeedWorking = !batchReady && feedSideCollecting && infeedProgramActive;\n\nlet infeedEntity;\nif (!conveyorHasData) {\n    infeedEntity = makeEntity(\"infeed\", \"Подводящий блок\", \"nodata\", \"Нет данных\", \"Нет валидного снимка по подводящей стороне.\", \"\");\n} else if (!conveyorLinked) {\n    infeedEntity = makeEntity(\"infeed\", \"Подводящий блок\", \"offline\", \"Нет связи\", \"Нет связи с конвейером подвода.\", \"\");\n} else if (batchReady) {\n    infeedEntity = makeEntity(\"infeed\", \"Подводящий блок\", \"ready\", \"Готов\", \"Следующий блок уже собран.\", \"\");\n} else if (!feedSideEmptyValid) {\n    infeedEntity = makeEntity(\"infeed\", \"Подводящий блок\", \"nodata\", \"Нет данных\", \"Нет достоверного снимка подводящей стороны.\", \"\");\n} else if (infeedWorking) {\n    infeedEntity = makeEntity(\"infeed\", \"Подводящий блок\", \"work\", \"Работает\", \"Собирает следующий блок для COMMON.\", \"\");\n} else {\n    const infeedWaitReason = feedSideCollecting\n        ? \"Подводящий блок частично набран, ждет продолжение цикла.\"\n        : \"Блок еще не готов, ожидает следующий набор.\";\n    infeedEntity = makeEntity(\"infeed\", \"Подводящий блок\", \"wait\", \"Ждет\", infeedWaitReason, \"\");\n}\n\nconst conveyorErrorWord = toNumber(conveyor.error_word, 0);\nconst recoveryByBit = (conveyorErrorWord & 4) !== 0;\nconst commonLastLower = String(common.last || \"\").toLowerCase();\nconst recoveryByText = commonLastLower.includes(\"manual recovery required\");\nconst recoveryRequired = recoveryByBit || recoveryByText;\n\nconst sealBusy = toBoolWithDefault(seal.busy, false) || toBoolWithDefault(seal.start_out, false);\nconst sealDonePendingUnload = toBoolWithDefault(common.sealer_done_pending_unload, false);\nconst sealDone = toBoolWithDefault(seal.done, false);\n\nlet sealerEntity;\nif (!sealHasData) {\n    sealerEntity = makeEntity(\"sealer\", \"Запайщик\", \"nodata\", \"Нет данных\", \"Нет валидного снимка по запайщику.\", \"\");\n} else if (!sealLinked) {\n    sealerEntity = makeEntity(\"sealer\", \"Запайщик\", \"offline\", \"Нет связи\", \"Нет связи с платой запайщика.\", \"\");\n} else if (recoveryRequired) {\n    sealerEntity = makeEntity(\"sealer\", \"Запайщик\", \"recovery\", \"Требует восстановления\", \"Нужно восстановление перед продолжением производства.\", \"\");\n} else if (sealBusy) {\n    sealerEntity = makeEntity(\"sealer\", \"Запайщик\", \"work\", \"Работает\", \"Идет цикл запайки.\", \"\");\n} else if (sealDonePendingUnload || (sealDone && !sealBusy)) {\n    sealerEntity = makeEntity(\"sealer\", \"Запайщик\", \"wait\", \"Ждет\", \"Цикл завершен, ожидает выгрузку блока.\", \"\");\n} else {\n    sealerEntity = makeEntity(\"sealer\", \"Запайщик\", \"ready\", \"Готов\", \"Свободен для следующего этапа.\", \"\");\n}\n\nconst outfeedReady = conveyorLinked && toBoolWithDefault(conveyor.outfeed_ready_for_batch, false);\nconst outfeedActive =\n    (otvodHasData && toBoolWithDefault(otvod.active, false)) ||\n    (otvodHasData && toBoolWithDefault(otvod.step2_active, false)) ||\n    (otvodHasData && toBoolWithDefault(otvod.vfd_timed_run_active, false)) ||\n    (conveyorLinked && toBoolWithDefault(conveyor.vfd_timed_run_active, false));\nconst outfeedHolding = !outfeedReady && (\n    outfeedActive ||\n    toBoolWithDefault(common.active, false) ||\n    toBoolWithDefault(common.outfeed_seen_not_ready, false) ||\n    sealDonePendingUnload\n);\n\nlet outfeedEntity;\nif (!otvodHasData && !conveyorHasData) {\n    outfeedEntity = makeEntity(\"outfeed\", \"Отводящий блок\", \"nodata\", \"Нет данных\", \"Нет валидного снимка по отводу.\", \"\");\n} else if (!outfeedLinked) {\n    outfeedEntity = makeEntity(\"outfeed\", \"Отводящий блок\", \"offline\", \"Нет связи\", \"Нет связи с конвейером отвода.\", \"\");\n} else if (outfeedReady) {\n    outfeedEntity = makeEntity(\"outfeed\", \"Отводящий блок\", \"ready\", \"Готов\", \"Готов принять следующий блок COMMON.\", \"\");\n} else if (outfeedActive) {\n    outfeedEntity = makeEntity(\"outfeed\", \"Отводящий блок\", \"work\", \"Работает\", \"Идет активный отвод блока.\", \"\");\n} else if (outfeedHolding) {\n    outfeedEntity = makeEntity(\"outfeed\", \"Отводящий блок\", \"wait\", \"Ждет\", \"Пока не готов и удерживает продолжение COMMON.\", \"\");\n} else {\n    outfeedEntity = makeEntity(\"outfeed\", \"Отводящий блок\", \"wait\", \"Ждет\", \"Ожидает следующую команду.\", \"\");\n}\n\nconst entities = [manipEntity, infeedEntity, sealerEntity, outfeedEntity];\nconst allReady = entities.every((entity) => entity.key === \"ready\");\n\nconst masterBadge = {\n    key: state.masterOnline,\n    text: state.masterOnline === \"online\"\n        ? \"Мастер на связи\"\n        : state.masterOnline === \"offline\"\n            ? \"Нет связи с мастером\"\n            : \"Нет данных по мастеру\"\n};\n\nlet processText = \"Линия в ожидании команды COMMON START.\";\nif (state.masterOnline === \"offline\") {\n    processText = \"Нет связи с мастером COM12.\";\n} else if (sealerEntity.key === \"recovery\") {\n    processText = \"Нужно восстановление запайщика перед продолжением COMMON.\";\n} else if (toBoolWithDefault(common.active, false) && toBoolWithDefault(common.pause, false)) {\n    processText = \"COMMON на паузе: выполняется безопасная остановка.\";\n} else if (toBoolWithDefault(common.active, false)) {\n    processText = \"COMMON выполняется: \" + stageText(common.stage) + \".\";\n} else if (allReady) {\n    processText = \"Все сущности готовы к запуску COMMON START.\";\n}\n\nmsg.payload = {\n    title: \"Операторский экран COM12\",\n    subtitle: \"Состояние линии в реальном времени\",\n    summary: {\n        master: masterBadge,\n        lastUpdate: state.lastUpdate,\n        processText\n    },\n    entities,\n    cmdSeq: state.cmdSeq,\n    lastCmd: state.lastCmd\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 560,
+        "wires": [
+            [
+                "ui_template_operator_controls_summary",
+                "ui_template_operator_seal_status"
+            ]
+        ]
     },
     {
-        "id":  "ui_page_master_com12_operator",
-        "type":  "ui-page",
-        "ui":  "ui_base_master_com12_minimal",
-        "name":  "Управление COM12",
-        "path":  "/master-com12-operator",
-        "icon":  "tune",
-        "layout":  "grid",
-        "theme":  "ui_theme_master_com12_minimal",
-        "order":  1,
-        "className":  "page-master-com12-operator",
-        "visible":  "true",
-        "disabled":  "false",
-        "breakpoints":  [
-                            {
-                                "name":  "Default",
-                                "px":  0,
-                                "cols":  3
-                            },
-                            {
-                                "name":  "Tablet",
-                                "px":  576,
-                                "cols":  6
-                            },
-                            {
-                                "name":  "Small Desktop",
-                                "px":  768,
-                                "cols":  9
-                            },
-                            {
-                                "name":  "Desktop",
-                                "px":  1024,
-                                "cols":  12
-                            }
-                        ]
+        "id": "ui_page_master_com12_operator",
+        "type": "ui-page",
+        "ui": "ui_base_master_com12_minimal",
+        "name": "Управление COM12",
+        "path": "/master-com12-operator",
+        "icon": "tune",
+        "layout": "grid",
+        "theme": "ui_theme_master_com12_minimal",
+        "order": 1,
+        "className": "page-master-com12-operator",
+        "visible": "true",
+        "disabled": "false",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": 0,
+                "cols": 3
+            },
+            {
+                "name": "Tablet",
+                "px": 576,
+                "cols": 6
+            },
+            {
+                "name": "Small Desktop",
+                "px": 768,
+                "cols": 9
+            },
+            {
+                "name": "Desktop",
+                "px": 1024,
+                "cols": 12
+            }
+        ]
     },
     {
-        "id":  "ui_group_operator_common_master_com12",
-        "type":  "ui-group",
-        "page":  "ui_page_master_com12_operator",
-        "name":  "Управление циклом",
-        "width":  12,
-        "height":  1,
-        "order":  0,
-        "showTitle":  false,
-        "visible":  true,
-        "disabled":  false,
-        "className":  "group-operator-common",
-        "groupType":  "default"
+        "id": "ui_group_operator_common_master_com12",
+        "type": "ui-group",
+        "page": "ui_page_master_com12_operator",
+        "name": "Сводка и команды",
+        "width": 12,
+        "height": 1,
+        "order": 0,
+        "showTitle": false,
+        "visible": true,
+        "disabled": false,
+        "className": "group-operator-common",
+        "groupType": "default"
     },
     {
-        "id":  "ui_group_operator_seal_master_com12",
-        "type":  "ui-group",
-        "page":  "ui_page_master_com12_operator",
-        "name":  "Запайщик",
-        "width":  12,
-        "height":  1,
-        "order":  1,
-        "showTitle":  false,
-        "visible":  true,
-        "disabled":  false,
-        "className":  "group-operator-seal",
-        "groupType":  "default"
+        "id": "ui_group_operator_seal_master_com12",
+        "type": "ui-group",
+        "page": "ui_page_master_com12_operator",
+        "name": "Сущности линии",
+        "width": 12,
+        "height": 1,
+        "order": 1,
+        "showTitle": false,
+        "visible": true,
+        "disabled": false,
+        "className": "group-operator-entities",
+        "groupType": "default"
     },
     {
-        "id":  "ui_group_operator_mqtt_log_master_com12",
-        "type":  "ui-group",
-        "page":  "ui_page_master_com12_operator",
-        "name":  "MQTT лог",
-        "width":  12,
-        "height":  1,
-        "order":  2,
-        "showTitle":  false,
-        "visible":  true,
-        "disabled":  false,
-        "className":  "group-operator-mqtt-log",
-        "groupType":  "default"
+        "id": "ui_template_page_style_master_com12_operator",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "",
+        "page": "ui_page_master_com12_operator",
+        "ui": "",
+        "name": "Стили вкладки управления",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": ".page-master-com12-operator {\n  background: #f2eee7;\n}\n\n.operator-summary-card,\n.operator-entity-card {\n  background: #fffdf9;\n  border: 1px solid #d9d0c3;\n  border-radius: 16px;\n  box-shadow: 0 8px 20px rgba(24, 43, 36, 0.08);\n  color: #1f3f35;\n  font-family: \"Segoe UI\", \"Trebuchet MS\", sans-serif;\n  padding: 16px;\n}\n\n.operator-summary-card {\n  background: linear-gradient(140deg, #e7f2eb 0%, #f8f2e8 100%);\n}\n\n.operator-summary-head {\n  align-items: flex-start;\n  display: flex;\n  gap: 10px;\n  justify-content: space-between;\n}\n\n.operator-title {\n  margin: 0;\n}\n\n.operator-subtitle {\n  color: #4e6a61;\n  margin: 6px 0 0;\n}\n\n.operator-main-line {\n  font-size: 1.03rem;\n  font-weight: 600;\n  margin: 14px 0 0;\n}\n\n.operator-meta-grid {\n  display: grid;\n  gap: 10px;\n  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n  margin-top: 14px;\n}\n\n.operator-meta-box {\n  background: rgba(255, 255, 255, 0.75);\n  border-radius: 12px;\n  padding: 10px 12px;\n}\n\n.operator-meta-box span {\n  color: #5b7169;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 4px;\n}\n\n.operator-entities-grid {\n  display: grid;\n  gap: 12px;\n  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));\n}\n\n.operator-entity-title {\n  font-size: 1.12rem;\n  font-weight: 700;\n  margin: 0;\n}\n\n.operator-entity-status {\n  margin-top: 10px;\n}\n\n.operator-entity-reason {\n  margin: 12px 0 0;\n}\n\n.operator-entity-hint {\n  color: #5b7169;\n  font-size: 0.86rem;\n  margin-top: 8px;\n}\n\n.operator-status-chip {\n  border: 1px solid transparent;\n  border-radius: 999px;\n  display: inline-block;\n  font-weight: 700;\n  padding: 6px 12px;\n}\n\n.operator-status-chip--online,\n.operator-status-chip--ready {\n  background: #e5f5eb;\n  border-color: #b7ddc6;\n  color: #0b7a53;\n}\n\n.operator-status-chip--work {\n  background: #e8f1fb;\n  border-color: #b7cee9;\n  color: #145a96;\n}\n\n.operator-status-chip--wait {\n  background: #f6f1e7;\n  border-color: #dfcfad;\n  color: #7f6530;\n}\n\n.operator-status-chip--offline,\n.operator-status-chip--nodata {\n  background: #f1efeb;\n  border-color: #d4cdc2;\n  color: #6a6256;\n}\n\n.operator-status-chip--alarm,\n.operator-status-chip--recovery {\n  background: #fdebea;\n  border-color: #e6b7b3;\n  color: #8f2420;\n}\n",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "page:style",
+        "className": "",
+        "x": 220,
+        "y": 700,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "ui_template_page_style_master_com12_operator",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "",
-        "page":  "ui_page_master_com12_operator",
-        "ui":  "",
-        "name":  "Стили вкладки управления",
-        "order":  0,
-        "width":  0,
-        "height":  0,
-        "head":  "",
-        "format":  ".page-master-com12-operator {\n  background: #f3eee5;\n}\n\n.operator-card {\n  font-family: \"Trebuchet MS\", \"Segoe UI\", sans-serif;\n  background: #fffdf9;\n  border: 1px solid #ddd4c6;\n  border-radius: 20px;\n  box-shadow: 0 12px 28px rgba(28, 36, 33, 0.08);\n  color: #17352d;\n  padding: 20px;\n}\n\n.operator-card--hero {\n  background: linear-gradient(135deg, #eaf5ef 0%, #f7f0e7 100%);\n}\n\n.operator-header,\n.operator-card__top {\n  align-items: start;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 12px;\n  justify-content: space-between;\n}\n\n.operator-kicker {\n  color: #4e6a61;\n  font-size: 0.75rem;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.operator-card h2,\n.operator-card h3 {\n  margin: 8px 0 0;\n}\n\n.operator-card p {\n  color: #456259;\n  margin: 10px 0 0;\n}\n\n.operator-stamp {\n  background: rgba(255, 255, 255, 0.72);\n  border: 1px solid rgba(18, 44, 38, 0.08);\n  border-radius: 16px;\n  min-width: 220px;\n  padding: 12px 14px;\n}\n\n.operator-stamp span,\n.operator-meta span {\n  color: #5b7169;\n  display: block;\n  font-size: 0.82rem;\n  margin-bottom: 6px;\n}\n\n.operator-topic {\n  background: #edf3f0;\n  border-radius: 10px;\n  color: #214e41;\n  display: inline-block;\n  font-family: Consolas, \"Courier New\", monospace;\n  font-size: 0.9rem;\n  margin-left: 6px;\n  padding: 4px 8px;\n}\n\n.operator-pill-grid,\n.operator-meta-grid {\n  display: grid;\n  gap: 12px;\n  margin-top: 18px;\n}\n\n.operator-pill-grid {\n  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));\n}\n\n.operator-meta-grid {\n  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));\n}\n\n.operator-pill {\n  align-items: center;\n  border: 1px solid transparent;\n  border-radius: 999px;\n  display: inline-flex;\n  font-weight: 700;\n  justify-content: center;\n  min-height: 44px;\n  padding: 10px 14px;\n  text-align: center;\n}\n\n.operator-meta,\n.operator-note {\n  background: #f7f2ea;\n  border-radius: 14px;\n  padding: 12px 14px;\n}\n\n.operator-note {\n  color: #36544b;\n  margin-top: 18px;\n}\n\n.operator-log-box {\n  background: #f2eee6;\n  border: 1px solid #ddd4c6;\n  border-radius: 14px;\n  margin-top: 14px;\n  max-height: 320px;\n  overflow: auto;\n  padding: 10px 12px;\n}\n\n.operator-log-pre {\n  color: #214136;\n  font-family: Consolas, \"Courier New\", monospace;\n  font-size: 0.82rem;\n  line-height: 1.35;\n  margin: 0;\n  white-space: pre-wrap;\n}\n\n.operator-badge {\n  background: #e7f2ee;\n  border: 1px solid #b9d7cc;\n  border-radius: 999px;\n  color: #1d5f4d;\n  font-size: 0.82rem;\n  font-weight: 700;\n  padding: 6px 12px;\n}\n\n.is-active {\n  background: #e4f7eb;\n  border-color: #b8e1c6;\n  color: #0e7b56;\n}\n\n.is-inactive {\n  background: #f5efe5;\n  border-color: #ddd4c6;\n  color: #6c5b3d;\n}\n\n.is-unknown {\n  background: #f3efdf;\n  border-color: #ddd3a8;\n  color: #8d7425;\n}\n\n@media (max-width: 720px) {\n  .operator-stamp {\n    min-width: 0;\n    width: 100%;\n  }\n}\n",
-        "storeOutMessages":  true,
-        "passthru":  true,
-        "resendOnRefresh":  true,
-        "templateScope":  "page:style",
-        "className":  "",
-        "x":  220,
-        "y":  700,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
+        "id": "ui_template_operator_controls_summary",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_operator_common_master_com12",
+        "page": "",
+        "ui": "",
+        "name": "Сводка управления",
+        "order": 0,
+        "width": 12,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n  <div v-if=\"msg && msg.payload\" class=\"operator-summary-card\">\n    <div class=\"operator-summary-head\">\n      <div>\n        <h2 class=\"operator-title\">{{ msg.payload.title }}</h2>\n        <p class=\"operator-subtitle\">{{ msg.payload.subtitle }}</p>\n      </div>\n      <span class=\"operator-status-chip\" :class=\"'operator-status-chip--' + msg.payload.summary.master.key\">\n        {{ msg.payload.summary.master.text }}\n      </span>\n    </div>\n\n    <p class=\"operator-main-line\">{{ msg.payload.summary.processText }}</p>\n\n    <div class=\"operator-meta-grid\">\n      <div class=\"operator-meta-box\">\n        <span>Последнее обновление</span>\n        <strong>{{ msg.payload.summary.lastUpdate }}</strong>\n      </div>\n      <div class=\"operator-meta-box\">\n        <span>Последняя команда</span>\n        <strong>{{ msg.payload.lastCmd }}</strong>\n      </div>\n    </div>\n  </div>\n</template>",
+        "storeOutMessages": true,
+        "passthru": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 790,
+        "y": 560,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "ui_template_operator_controls_summary",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_common_master_com12",
-        "page":  "",
-        "ui":  "",
-        "name":  "Сводка управления",
-        "order":  0,
-        "width":  12,
-        "height":  0,
-        "head":  "",
-        "format":  "<template>\n  <div v-if=\"msg && msg.payload\" class=\"operator-card operator-card--hero\">\n    <div class=\"operator-kicker\">Операторская вкладка</div>\n    <div class=\"operator-header\">\n      <div>\n        <h2>{{ msg.payload.title }}</h2>\n        <p>{{ msg.payload.subtitle }}<code class=\"operator-topic\">{{ msg.payload.commandTopic }}</code></p>\n      </div>\n      <div class=\"operator-stamp\">\n        <span>Последнее обновление</span>\n        <strong>{{ msg.payload.lastUpdate }}</strong>\n      </div>\n    </div>\n\n    <div class=\"operator-pill-grid\">\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.common.active.key\">{{ msg.payload.common.active.text }}</span>\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.common.pause.key\">{{ msg.payload.common.pause.text }}</span>\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.common.sealerPendingUnload.key\">{{ msg.payload.common.sealerPendingUnload.text }}</span>\n    </div>\n\n    <div class=\"operator-meta-grid\">\n      <div class=\"operator-meta\">\n        <span>stage</span>\n        <strong>{{ msg.payload.common.stage }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>pause_state</span>\n        <strong>{{ msg.payload.common.pauseState }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>last_cmd</span>\n        <strong>{{ msg.payload.lastCmd }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>cmd_seq</span>\n        <strong>{{ msg.payload.cmdSeq }}</strong>\n      </div>\n    </div>\n\n    <div class=\"operator-note\">{{ msg.payload.common.last }}</div>\n  </div>\n</template>",
-        "storeOutMessages":  true,
-        "passthru":  false,
-        "resendOnRefresh":  true,
-        "templateScope":  "local",
-        "className":  "",
-        "x":  790,
-        "y":  560,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
+        "id": "ui_button_common_start_master_com12",
+        "type": "ui-button",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_operator_common_master_com12",
+        "name": "COMMON START",
+        "label": "COMMON START",
+        "order": 1,
+        "width": 6,
+        "height": 1,
+        "emulateClick": false,
+        "tooltip": "Запустить общий цикл COMMON на мастере COM12",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "COMMON START",
+        "payloadType": "str",
+        "topic": "fyl/master_com12/cmd",
+        "topicType": "str",
+        "buttonColor": "#0d6b57",
+        "textColor": "#ffffff",
+        "iconColor": "#ffffff",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 470,
+        "y": 620,
+        "wires": [
+            [
+                "mqtt_out_master_cmd_minimal"
+            ]
+        ]
     },
     {
-        "id":  "ui_button_common_start_master_com12",
-        "type":  "ui-button",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_common_master_com12",
-        "name":  "COMMON START",
-        "label":  "COMMON START",
-        "order":  1,
-        "width":  6,
-        "height":  1,
-        "emulateClick":  false,
-        "tooltip":  "Запустить общий цикл COMMON на мастере COM12",
-        "color":  "",
-        "bgcolor":  "",
-        "className":  "",
-        "icon":  "",
-        "iconPosition":  "left",
-        "payload":  "COMMON START",
-        "payloadType":  "str",
-        "topic":  "fyl/master_com12/cmd",
-        "topicType":  "str",
-        "buttonColor":  "#0d6b57",
-        "textColor":  "#ffffff",
-        "iconColor":  "#ffffff",
-        "enableClick":  true,
-        "enablePointerdown":  false,
-        "pointerdownPayload":  "",
-        "pointerdownPayloadType":  "str",
-        "enablePointerup":  false,
-        "pointerupPayload":  "",
-        "pointerupPayloadType":  "str",
-        "x":  470,
-        "y":  620,
-        "wires":  [
-                      [
-                          "mqtt_out_master_cmd_minimal"
-                      ]
-                  ]
+        "id": "ui_button_common_pause_master_com12",
+        "type": "ui-button",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_operator_common_master_com12",
+        "name": "COMMON PAUSE",
+        "label": "COMMON PAUSE",
+        "order": 2,
+        "width": 6,
+        "height": 1,
+        "emulateClick": false,
+        "tooltip": "Запросить паузу общего цикла COMMON на мастере COM12",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "COMMON PAUSE",
+        "payloadType": "str",
+        "topic": "fyl/master_com12/cmd",
+        "topicType": "str",
+        "buttonColor": "#9a5b1a",
+        "textColor": "#ffffff",
+        "iconColor": "#ffffff",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 470,
+        "y": 660,
+        "wires": [
+            [
+                "mqtt_out_master_cmd_minimal"
+            ]
+        ]
     },
     {
-        "id":  "ui_button_common_pause_master_com12",
-        "type":  "ui-button",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_common_master_com12",
-        "name":  "COMMON PAUSE",
-        "label":  "COMMON PAUSE",
-        "order":  2,
-        "width":  6,
-        "height":  1,
-        "emulateClick":  false,
-        "tooltip":  "Запросить паузу общего цикла COMMON на мастере COM12",
-        "color":  "",
-        "bgcolor":  "",
-        "className":  "",
-        "icon":  "",
-        "iconPosition":  "left",
-        "payload":  "COMMON PAUSE",
-        "payloadType":  "str",
-        "topic":  "fyl/master_com12/cmd",
-        "topicType":  "str",
-        "buttonColor":  "#9a5b1a",
-        "textColor":  "#ffffff",
-        "iconColor":  "#ffffff",
-        "enableClick":  true,
-        "enablePointerdown":  false,
-        "pointerdownPayload":  "",
-        "pointerdownPayloadType":  "str",
-        "enablePointerup":  false,
-        "pointerupPayload":  "",
-        "pointerupPayloadType":  "str",
-        "x":  470,
-        "y":  660,
-        "wires":  [
-                      [
-                          "mqtt_out_master_cmd_minimal"
-                      ]
-                  ]
+        "id": "ui_template_operator_seal_status",
+        "type": "ui-template",
+        "z": "tab_master_com12_minimal",
+        "group": "ui_group_operator_seal_master_com12",
+        "page": "",
+        "ui": "",
+        "name": "Карточки сущностей",
+        "order": 0,
+        "width": 12,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n  <div v-if=\"msg && msg.payload\" class=\"operator-entities-grid\">\n    <article v-for=\"entity in msg.payload.entities\" :key=\"entity.id\" class=\"operator-entity-card\">\n      <h3 class=\"operator-entity-title\">{{ entity.title }}</h3>\n      <div class=\"operator-entity-status\">\n        <span class=\"operator-status-chip\" :class=\"'operator-status-chip--' + entity.key\">\n          {{ entity.status }}\n        </span>\n      </div>\n      <p class=\"operator-entity-reason\">{{ entity.reason }}</p>\n      <p v-if=\"entity.hint\" class=\"operator-entity-hint\">{{ entity.hint }}</p>\n    </article>\n  </div>\n</template>",
+        "storeOutMessages": true,
+        "passthru": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 800,
+        "y": 620,
+        "wires": [
+            []
+        ]
     },
     {
-        "id":  "ui_button_operator_log_clear_mqtt",
-        "type":  "ui-button",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_mqtt_log_master_com12",
-        "name":  "Очистить лог MQTT",
-        "label":  "ОЧИСТИТЬ ЛОГ",
-        "order":  0,
-        "width":  4,
-        "height":  1,
-        "emulateClick":  false,
-        "tooltip":  "Очистить журнал MQTT на вкладке оператора",
-        "color":  "",
-        "bgcolor":  "",
-        "className":  "",
-        "icon":  "",
-        "iconPosition":  "left",
-        "payload":  "clear",
-        "payloadType":  "str",
-        "topic":  "operator/mqtt-log/control",
-        "topicType":  "str",
-        "buttonColor":  "#475569",
-        "textColor":  "#ffffff",
-        "iconColor":  "#ffffff",
-        "enableClick":  true,
-        "enablePointerdown":  false,
-        "pointerdownPayload":  "",
-        "pointerdownPayloadType":  "str",
-        "enablePointerup":  false,
-        "pointerupPayload":  "",
-        "pointerupPayloadType":  "str",
-        "x":  500,
-        "y":  740,
-        "wires":  [
-                      [
-                          "func_operator_mqtt_log_control"
-                      ]
-                  ]
+        "id": "mqtt_out_master_cmd_minimal",
+        "type": "mqtt out",
+        "z": "tab_master_com12_minimal",
+        "name": "Команды master",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt_broker_master1884_minimal",
+        "x": 800,
+        "y": 700,
+        "wires": []
     },
     {
-        "id":  "ui_button_operator_log_start_mqtt",
-        "type":  "ui-button",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_mqtt_log_master_com12",
-        "name":  "Старт логирования MQTT",
-        "label":  "НАЧАТЬ ЛОГИРОВАНИЕ",
-        "order":  1,
-        "width":  4,
-        "height":  1,
-        "emulateClick":  false,
-        "tooltip":  "Включить запись входящих MQTT сообщений status/online",
-        "color":  "",
-        "bgcolor":  "",
-        "className":  "",
-        "icon":  "",
-        "iconPosition":  "left",
-        "payload":  "start",
-        "payloadType":  "str",
-        "topic":  "operator/mqtt-log/control",
-        "topicType":  "str",
-        "buttonColor":  "#0d6b57",
-        "textColor":  "#ffffff",
-        "iconColor":  "#ffffff",
-        "enableClick":  true,
-        "enablePointerdown":  false,
-        "pointerdownPayload":  "",
-        "pointerdownPayloadType":  "str",
-        "enablePointerup":  false,
-        "pointerupPayload":  "",
-        "pointerupPayloadType":  "str",
-        "x":  530,
-        "y":  780,
-        "wires":  [
-                      [
-                          "func_operator_mqtt_log_control"
-                      ]
-                  ]
-    },
-    {
-        "id":  "ui_button_operator_log_stop_mqtt",
-        "type":  "ui-button",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_mqtt_log_master_com12",
-        "name":  "Стоп логирования MQTT",
-        "label":  "ОСТАНОВИТЬ ЛОГИРОВАНИЕ",
-        "order":  2,
-        "width":  4,
-        "height":  1,
-        "emulateClick":  false,
-        "tooltip":  "Остановить запись входящих MQTT сообщений",
-        "color":  "",
-        "bgcolor":  "",
-        "className":  "",
-        "icon":  "",
-        "iconPosition":  "left",
-        "payload":  "stop",
-        "payloadType":  "str",
-        "topic":  "operator/mqtt-log/control",
-        "topicType":  "str",
-        "buttonColor":  "#9a5b1a",
-        "textColor":  "#ffffff",
-        "iconColor":  "#ffffff",
-        "enableClick":  true,
-        "enablePointerdown":  false,
-        "pointerdownPayload":  "",
-        "pointerdownPayloadType":  "str",
-        "enablePointerup":  false,
-        "pointerupPayload":  "",
-        "pointerupPayloadType":  "str",
-        "x":  550,
-        "y":  820,
-        "wires":  [
-                      [
-                          "func_operator_mqtt_log_control"
-                      ]
-                  ]
-    },
-    {
-        "id":  "func_operator_mqtt_log_control",
-        "type":  "function",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Управление MQTT логом",
-        "func":  "let state = flow.get(\"operatorMqttLogState\");\nif (!state || typeof state !== \"object\") {\n    state = {\n        enabled: false,\n        lines: [],\n        lastAction: \"Логирование остановлено\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nif (!Array.isArray(state.lines)) {\n    state.lines = [];\n}\n\nconst action = String(msg.payload == null ? \"\" : msg.payload).trim().toLowerCase();\nif (action === \"start\") {\n    state.enabled = true;\n    state.lastAction = \"Логирование MQTT запущено\";\n} else if (action === \"stop\") {\n    state.enabled = false;\n    state.lastAction = \"Логирование MQTT остановлено\";\n} else if (action === \"clear\") {\n    state.lines = [];\n    state.lastAction = \"Лог очищен\";\n}\n\nstate.lastUpdate = new Date().toLocaleString(\"ru-RU\", { hour12: false });\nflow.set(\"operatorMqttLogState\", state);\n\nmsg.payload = {\n    enabled: state.enabled,\n    lineCount: state.lines.length,\n    lastAction: state.lastAction,\n    lastUpdate: state.lastUpdate,\n    logText: state.lines.join(\"\\n\")\n};\n\nreturn msg;",
-        "outputs":  1,
-        "timeout":  "",
-        "noerr":  0,
-        "initialize":  "",
-        "finalize":  "",
-        "libs":  [
-
-                 ],
-        "x":  820,
-        "y":  780,
-        "wires":  [
-                      [
-                          "ui_template_operator_mqtt_log_view"
-                      ]
-                  ]
-    },
-    {
-        "id":  "func_operator_mqtt_log_capture",
-        "type":  "function",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Сбор MQTT лога",
-        "func":  "let state = flow.get(\"operatorMqttLogState\");\nif (!state || typeof state !== \"object\") {\n    state = {\n        enabled: false,\n        lines: [],\n        lastAction: \"Логирование остановлено\",\n        lastUpdate: \"ожидание данных\"\n    };\n}\n\nif (!Array.isArray(state.lines)) {\n    state.lines = [];\n}\n\nif (!state.enabled) {\n    return null;\n}\n\nlet payloadText = \"\";\nif (typeof msg.payload === \"string\") {\n    payloadText = msg.payload;\n} else {\n    try {\n        payloadText = JSON.stringify(msg.payload);\n    } catch (err) {\n        payloadText = String(msg.payload);\n    }\n}\n\nconst ts = new Date().toLocaleString(\"ru-RU\", { hour12: false });\nconst topic = String(msg.topic || \"-\");\nstate.lines.push(ts + \" | \" + topic + \" | \" + payloadText);\n\nconst maxLines = 300;\nif (state.lines.length > maxLines) {\n    state.lines = state.lines.slice(state.lines.length - maxLines);\n}\n\nstate.lastUpdate = ts;\nflow.set(\"operatorMqttLogState\", state);\n\nmsg.payload = {\n    enabled: state.enabled,\n    lineCount: state.lines.length,\n    lastAction: state.lastAction,\n    lastUpdate: state.lastUpdate,\n    logText: state.lines.join(\"\\n\")\n};\n\nreturn msg;",
-        "outputs":  1,
-        "timeout":  "",
-        "noerr":  0,
-        "initialize":  "",
-        "finalize":  "",
-        "libs":  [
-
-                 ],
-        "x":  810,
-        "y":  860,
-        "wires":  [
-                      [
-                          "ui_template_operator_mqtt_log_view"
-                      ]
-                  ]
-    },
-    {
-        "id":  "ui_template_operator_mqtt_log_view",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_mqtt_log_master_com12",
-        "page":  "",
-        "ui":  "",
-        "name":  "MQTT лог",
-        "order":  3,
-        "width":  12,
-        "height":  0,
-        "head":  "",
-        "format":  "<template>\n  <div v-if=\"msg && msg.payload\" class=\"operator-card\">\n    <div class=\"operator-card__top\">\n      <div>\n        <div class=\"operator-kicker\">Лог MQTT</div>\n        <h3>Управление логированием</h3>\n      </div>\n      <span class=\"operator-badge\" :class=\"'is-' + (msg.payload.enabled ? 'active' : 'inactive')\">\n        {{ msg.payload.enabled ? 'Логирование включено' : 'Логирование остановлено' }}\n      </span>\n    </div>\n\n    <div class=\"operator-meta-grid\">\n      <div class=\"operator-meta\">\n        <span>Событий</span>\n        <strong>{{ msg.payload.lineCount }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>Последнее действие</span>\n        <strong>{{ msg.payload.lastAction }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>Обновлено</span>\n        <strong>{{ msg.payload.lastUpdate }}</strong>\n      </div>\n    </div>\n\n    <div class=\"operator-log-box\">\n      <pre class=\"operator-log-pre\">{{ msg.payload.logText || 'Лог пуст' }}</pre>\n    </div>\n  </div>\n</template>",
-        "storeOutMessages":  true,
-        "passthru":  false,
-        "resendOnRefresh":  true,
-        "templateScope":  "local",
-        "className":  "",
-        "x":  1080,
-        "y":  820,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
-    },
-    {
-        "id":  "ui_template_operator_seal_status",
-        "type":  "ui-template",
-        "z":  "tab_master_com12_minimal",
-        "group":  "ui_group_operator_seal_master_com12",
-        "page":  "",
-        "ui":  "",
-        "name":  "Статус запайщика",
-        "order":  0,
-        "width":  12,
-        "height":  0,
-        "head":  "",
-        "format":  "<template>\n  <div v-if=\"msg && msg.payload\" class=\"operator-card\">\n    <div class=\"operator-card__top\">\n      <div>\n        <div class=\"operator-kicker\">Состояние запайщика</div>\n        <h3>SEAL на COM10</h3>\n      </div>\n      <span class=\"operator-badge\">COMMON: {{ msg.payload.common.stage }}</span>\n    </div>\n\n    <div class=\"operator-pill-grid\">\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.seal.online.key\">{{ msg.payload.seal.online.text }}</span>\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.seal.busy.key\">{{ msg.payload.seal.busy.text }}</span>\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.seal.done.key\">{{ msg.payload.seal.done.text }}</span>\n      <span class=\"operator-pill\" :class=\"'is-' + msg.payload.seal.startOut.key\">{{ msg.payload.seal.startOut.text }}</span>\n    </div>\n\n    <div class=\"operator-meta-grid\">\n      <div class=\"operator-meta\">\n        <span>completion_seq</span>\n        <strong>{{ msg.payload.seal.completionSeq }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>pulse_ms</span>\n        <strong>{{ msg.payload.seal.pulseMs }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>pause_state</span>\n        <strong>{{ msg.payload.common.pauseState }}</strong>\n      </div>\n      <div class=\"operator-meta\">\n        <span>last common event</span>\n        <strong>{{ msg.payload.common.last }}</strong>\n      </div>\n    </div>\n  </div>\n</template>",
-        "storeOutMessages":  true,
-        "passthru":  false,
-        "resendOnRefresh":  true,
-        "templateScope":  "local",
-        "className":  "",
-        "x":  800,
-        "y":  620,
-        "wires":  [
-                      [
-
-                      ]
-                  ]
-    },
-    {
-        "id":  "mqtt_out_master_cmd_minimal",
-        "type":  "mqtt out",
-        "z":  "tab_master_com12_minimal",
-        "name":  "Команды master",
-        "topic":  "",
-        "qos":  "",
-        "retain":  "",
-        "respTopic":  "",
-        "contentType":  "",
-        "userProps":  "",
-        "correl":  "",
-        "expiry":  "",
-        "broker":  "mqtt_broker_master1884_minimal",
-        "x":  800,
-        "y":  700,
-        "wires":  [
-
-                  ]
-    },
-    {
-        "id":  "mqtt_broker_master1884_minimal",
-        "type":  "mqtt-broker",
-        "name":  "Local Mosquitto 1885",
-        "broker":  "127.0.0.1",
-        "port":  "1885",
-        "clientid":  "nodered_master_com12_minimal",
-        "autoConnect":  true,
-        "usetls":  false,
-        "protocolVersion":  "4",
-        "keepalive":  "60",
-        "cleansession":  true,
-        "autoUnsubscribe":  true,
-        "birthTopic":  "",
-        "birthQos":  "0",
-        "birthRetain":  "false",
-        "birthPayload":  "",
-        "birthMsg":  {
-
-                     },
-        "closeTopic":  "",
-        "closeQos":  "0",
-        "closeRetain":  "false",
-        "closePayload":  "",
-        "closeMsg":  {
-
-                     },
-        "willTopic":  "",
-        "willQos":  "0",
-        "willRetain":  "false",
-        "willPayload":  "",
-        "willMsg":  {
-
-                    },
-        "userProps":  "",
-        "sessionExpiry":  ""
+        "id": "mqtt_broker_master1884_minimal",
+        "type": "mqtt-broker",
+        "name": "Local Mosquitto 1885",
+        "broker": "127.0.0.1",
+        "port": "1885",
+        "clientid": "nodered_master_com12_minimal",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
     }
 ]

@@ -1,0 +1,114 @@
+<mxfile host="app.diagrams.net" modified="2026-04-07T08:30:00.000Z" agent="Codex" version="29.6.6">
+  <diagram id="manual-recovery-architecture" name="Manual recovery architecture">
+    <mxGraphModel dx="1600" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="2" value="Архитектура manual recovery: automation не продолжает старый COMMON после аварии" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="1100" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="3" value="Идея: `COMMON` строгий. После аварии система не делает auto-resume. Оператор вручную доводит узлы до валидного состояния и только потом запускает новый `COMMON START`." style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="940" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="10" value="Нормальный production-контур" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9e2f3;strokeColor=#6c8ebf;fontStyle=1;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="20" y="160" width="280" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="COMMON active" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="Узлы работают в automation-контуре:&#xa;манипулятор / подвод / POST7 / отвод" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="20" value="Точка отказа" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f4cccc;strokeColor=#b85450;fontStyle=1;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="340" y="160" width="280" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Alarm / interlock / fault" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fde9e7;strokeColor=#b85450;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="220" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="Примеры:&#xa;- manipulator alarm&#xa;- POST7 manual recovery required&#xa;- conveyor alarm&#xa;- неясное механическое состояние" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="370" y="320" width="220" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="30" value="Решение master" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ead1dc;strokeColor=#9673a6;fontStyle=1;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="660" y="160" width="320" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="31" value="COMMON aborted" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="710" y="220" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="32" value="Master обязан:&#xa;- остановить automation&#xa;- запомнить причину abort&#xa;- не продолжать старый цикл сам" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="710" y="320" width="220" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="40" value="Recovery-контур оператора" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="160" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="41" value="Manual recovery required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="220" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="42" value="Оператор вручную работает с узлами:&#xa;- манипулятор&#xa;- подводящий блок&#xa;- запайщик&#xa;- отводящий блок" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="320" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="43" value="Локальные действия:&#xa;- ручные движения&#xa;- выгрузка хвоста&#xa;- возврат в стартовую позу&#xa;- локальный recovery clear там, где нужен" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="440" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="50" value="Возврат в production-ready" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="20" y="620" width="1380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="51" value="Все обязательные сущности снова в `ready`" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf5ea;strokeColor=#82b366;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="690" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="52" value="Master видит:&#xa;- manipulator ready&#xa;- conveyor/outfeed ready&#xa;- нет production-visible interlock" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf5ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="440" y="690" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="53" value="Старый COMMON не возобновляется" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="690" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="54" value="Оператор запускает новый `COMMON START`" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="690" width="240" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="60" value="Почему не auto-resume" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=15;" vertex="1" parent="1">
+          <mxGeometry x="20" y="840" width="1380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="61" value="После аварии master не знает достаточно, чтобы безопасно продолжать:&#xa;- где тарелки&#xa;- удержал ли манипулятор блок&#xa;- пуст ли запайщик&#xa;- завершен ли отвод&#xa;- не остался ли узел в промежуточной механике" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="900" width="520" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="62" value="Поэтому правильная модель:&#xa;`alarm -> abort -> manual recovery -> ready -> new COMMON START`" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="915" width="360" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="63" value="Отдельная HMI-вкладка recovery должна показывать:&#xa;- последнюю причину abort&#xa;- какие сущности еще не восстановлены&#xa;- какие ручные действия доступны&#xa;- можно ли запускать новый COMMON" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="900" width="340" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="100" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" edge="1" parent="1" source="11" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="101" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" edge="1" parent="1" source="21" target="31">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="102" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" edge="1" parent="1" source="31" target="41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="103" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" edge="1" parent="1" source="41" target="51">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="104" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" edge="1" parent="1" source="51" target="52">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="105" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" edge="1" parent="1" source="52" target="54">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="106" value="не resume" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;dashed=1;strokeColor=#b85450;fontColor=#b85450;strokeWidth=2;" edge="1" parent="1" source="31" target="53">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

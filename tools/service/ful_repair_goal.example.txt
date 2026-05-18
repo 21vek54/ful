@@ -1,0 +1,17 @@
+Environment: ful.
+
+Objective:
+- Restore stable COMMON standard run on COM10/COM11/COM12 without early abort.
+- Primary blocker to eliminate: "FEED STRICT: model invalidated: program1 aborted".
+- A run is considered healthy when:
+  1) COMMON starts and does not fail early with conveyor/manipulator offline.
+  2) No early "program1 aborted" invalidates strict model in the first working window.
+  3) Run does not terminate only by immediate abort path; it should reach stable progress.
+
+Execution policy:
+- Use minimal safe diffs.
+- After code change, flash required board(s) and run bench again.
+- Keep iterating until objective reached, then output AUTO_DONE with short summary:
+  - what changed,
+  - which board(s) flashed,
+  - which run/log confirms the fix.

@@ -3,8 +3,11 @@
 #include <Arduino.h>
 
 #include "app/cycle_control.h"
+#include "app/runtime_log.h"
 #include "core/pins.h"
 #include "core/settings.h"
+#include "groups/infeed/infeed_group.h"
+#include "legacy/program1.h"
 #include "legacy/shift_control.h"
 
 namespace {
@@ -48,6 +51,14 @@ SensorFilterState g_sensorFilter;
 bool g_sensorStreamEnabled = false;
 uint32_t g_lastSensorPrintMs = 0;
 uint32_t g_totalStepsCounter = 0;
+
+bool shouldLogPositionalInfo()
+{
+    if (program1GetStateCode() == 0U) {
+        return true;
+    }
+    return app::runtime_log::isDebugEnabled();
+}
 
 void updateDebouncedSensorFilter(
     SensorFilterState &state,
@@ -176,7 +187,9 @@ void updatePositionalMotionProfileDelay()
 
 bool readSensorPlateRaw()
 {
-    return digitalRead(PIN_SENSOR) == HIGH;
+    const bool physicalLevel = digitalRead(PIN_SENSOR) == HIGH;
+    const bool emulatedLevel = groups::infeed::isPlateSensorEmulationRawActive();
+    return physicalLevel || emulatedLevel;
 }
 
 } // namespace
@@ -253,7 +266,9 @@ void stopPositionalMotion()
     g_posMotion.continuous = false;
     g_posMotion.stepsTotal = 0;
     g_posMotion.stepsDone = 0;
-    Serial.println("P: EVA25 stopped.");
+    if (shouldLogPositionalInfo()) {
+        Serial.println("P: EVA25 stopped.");
+    }
 }
 
 void stopMotion()
@@ -358,14 +373,16 @@ void startPositionalProfiledMotion(uint32_t stepsTotal, uint32_t nominalDelayUs)
     g_posMotion.lastPulseStartUs = micros();
     updatePositionalMotionProfileDelay();
 
-    Serial.print("POS: профилированный ход, шагов=");
-    Serial.print(stepsTotal);
-    Serial.print(", расстояние=");
-    Serial.print(static_cast<float>(stepsTotal) / static_cast<float>(core::g_settings.pulsesPerMm), 1);
-    Serial.print(" мм");
-    Serial.print(", полка=");
-    Serial.print(nominalDelayUs);
-    Serial.println(" мкс.");
+    if (shouldLogPositionalInfo()) {
+        Serial.print("POS: профилированный ход, шагов=");
+        Serial.print(stepsTotal);
+        Serial.print(", расстояние=");
+        Serial.print(static_cast<float>(stepsTotal) / static_cast<float>(core::g_settings.pulsesPerMm), 1);
+        Serial.print(" мм");
+        Serial.print(", полка=");
+        Serial.print(nominalDelayUs);
+        Serial.println(" мкс.");
+    }
 }
 
 void processPositionalMotion()
@@ -394,7 +411,9 @@ void processPositionalMotion()
         }
         if (g_posMotion.stepsDone >= g_posMotion.stepsTotal) {
             stopPositionalMotion();
-            Serial.println("POS: движение завершено.");
+            if (shouldLogPositionalInfo()) {
+                Serial.println("POS: движение завершено.");
+            }
         } else {
             updatePositionalMotionProfileDelay();
         }

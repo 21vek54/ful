@@ -1,0 +1,149 @@
+<mxfile host="app.diagrams.net" modified="2026-04-10T10:00:00.000Z" agent="Codex" version="29.6.6">
+  <diagram id="plate-tracking-low-level-v5" name="Plate tracking low-level v5">
+    <mxGraphModel dx="1600" dy="1200" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="2" value="version_5: plate tracking и I2C-контракт по слоям (COM10/COM11 -&gt; COM12)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="1700" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="3" value="Смысл схемы: разнести путь данных по слоям. Каждый следующий слой использует более грубую модель, чем предыдущий." style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="1320" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="10" value="Слой 1. COM10 local model (физика и low-level учет)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2e7d32;strokeColor=#2e7d32;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="150" width="1640" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="Слой 2. COM10 wire semantics (coarse transform перед I2C)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#558b2f;strokeColor=#558b2f;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="435" width="1640" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="Слой 3. I2C контракт: что реально приезжает на COM12" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#6a1b9a;strokeColor=#6a1b9a;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="690" width="1640" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="Слой 4. COM12 snapshot gate (trusted vs surrogate)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1f4e79;strokeColor=#1f4e79;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="955" width="1640" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="Слой 5. COM12 final gate и outcome" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0d47a1;strokeColor=#0d47a1;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1210" width="1640" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="15" value="Слой 6. Где рождается mismatch физики и accounting" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#c62828;strokeColor=#c62828;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1465" width="1640" height="38" as="geometry" />
+        </mxCell>
+
+        <mxCell id="20" value="Буфер&#xa;plate-state: unknown | 0 | 2&#xa;&#xa;Смысл: локальный bufferCount на COM10" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="225" width="260" height="125" as="geometry" />
+        </mxCell>
+
+        <mxCell id="21" value="2-ручейковый подводной&#xa;plate-state: unknown | 0..3 pairs&#xa;run: Idle | Running | Positioning&#xa;flags: sensorPlateDetected / ready / busy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="345" y="225" width="300" height="125" as="geometry" />
+        </mxCell>
+
+        <mxCell id="22" value="Запайщик&#xa;run: Idle | StartPulseActive | WaitDone&#xa;flags: busy / ready / doneInputActive / startPulseActive / waitDoneActive" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="690" y="225" width="300" height="125" as="geometry" />
+        </mxCell>
+
+        <mxCell id="25" value="2-ручейковый отводной&#xa;draft mapping: step2 часть outfeed&#xa;run: Idle | Step2Running | LocalCycleRunning&#xa;flags: step2Active / step2Continuous / busy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1035" y="225" width="300" height="125" as="geometry" />
+        </mxCell>
+
+        <mxCell id="26" value="Основной отводной&#xa;draft mapping: main conveyor часть outfeed&#xa;run: Idle | MainConveyorRunning&#xa;flags: vfdRelayActive / vfdTimedRunActive / readyForBatch / busy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="225" width="280" height="125" as="geometry" />
+        </mxCell>
+
+        <mxCell id="27" value="Черновик слоя 1&#xa;Здесь тракт разложен по физическим зонам. Для outfeed пока показано разделение одной runtime-группы на два концептуальных участка: 2-ручейковый отводной и основной отводной." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="370" width="1620" height="48" as="geometry" />
+        </mxCell>
+
+        <mxCell id="23" value="computeWireCounts() на COM10&#xa;если !feedSideEmptyValid -&gt; buffer=0, sealer=0, residualKnown=false&#xa;иначе buffer=(strict ? 0 : 1)&#xa;sealer=(busy|done|start) ? 6 : 0&#xa;residualKnown = bufferValid &amp;&amp; sealerValid &amp;&amp; !infeed.busy &amp;&amp; !program1Active" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcedc8;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="495" width="760" height="165" as="geometry" />
+        </mxCell>
+
+        <mxCell id="24" value="Потеря смысла между layer1 -&gt; layer2&#xa;1) buffer=2 схлопывается в coarse 1&#xa;2) unknown может выглядеть как 0 без учета valid/fresh&#xa;3) sealer residual кодируется как 0 или 6 по активности, а не по устойчивому факту" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="850" y="495" width="770" height="165" as="geometry" />
+        </mxCell>
+
+        <mxCell id="30" value="COM10 -&gt; COM12 managed frame&#xa;errorWord: bit3=ack, bits4..15=epoch&#xa;heartbeat bits20..23 = buffer_count&#xa;bits24..27 = sealer_count&#xa;bit28 = residual_known&#xa;bit29 = ext_valid&#xa;bits30..31 = pause_state" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="750" width="760" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="31" value="COM11 -&gt; COM12 managed frame&#xa;errorWord: bit5=ack, bits6..15=epoch (10 bit)&#xa;extra0..3: mode / job / sensors / conflicts+step&#xa;buffer_count / sealer_count: отсутствуют" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="860" y="750" width="760" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="32" value="Роль слоя 3&#xa;COM10 поставляет counts&#xa;COM11 поставляет ack/epoch и state&#xa;COM12 получает уже wire-модель, а не local-модель" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="940" width="1580" height="0" as="geometry" />
+        </mxCell>
+
+        <mxCell id="40" value="COM12 snapshot gate&#xa;nodeEpochConfirmed = convAck &amp;&amp; manipAck &amp;&amp; !convStale &amp;&amp; !manipStale &amp;&amp; extValid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1015" width="500" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="41" value="Если gate=true&#xa;COM12 берет wireBuf / wireSeal / wireResidualKnown&#xa;и помечает snapshot как trusted" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9e2f3;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="590" y="1015" width="500" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="42" value="Если gate=false&#xa;COM12 падает в surrogate ветку&#xa;(feedSideEmptyStrict + sealer busy/done/latch)&#xa;fresh=false, trusted=false" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="1015" width="480" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="43" value="Finalize gate на COM12&#xa;trusted&#xa;+ buffer_count == 0&#xa;+ sealer_count == 0 или (sealer_count &gt; 0 &amp;&amp; residualKnown)&#xa;+ drainIdle&#xa;+ nodeEpochConfirmed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1270" width="760" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="44" value="Outcome на COM12&#xa;если sealer_count == 0 -&gt; pause_empty&#xa;если sealer_count &gt; 0 -&gt; pause_hold&#xa;&#xa;Решение принимает уже coarse snapshot-layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="860" y="1270" width="760" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="45" value="Где рождается mismatch&#xa;1) local model COM10 точнее, чем wire contract&#xa;2) trusted snapshot доверяет transport/epoch, но не добавляет физической точности&#xa;3) surrogate path тоже coarse&#xa;4) итоговый accounting зависит от semantics buffer_count / sealer_count, а не только от sync" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1525" width="1580" height="165" as="geometry" />
+        </mxCell>
+
+        <mxCell id="50" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#2e7d32;" edge="1" parent="1" source="20" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="51" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#2e7d32;" edge="1" parent="1" source="21" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="61" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#2e7d32;" edge="1" parent="1" source="22" target="25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="62" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#2e7d32;" edge="1" parent="1" source="25" target="26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="63" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#2e7d32;dashed=1;" edge="1" parent="1" source="27" target="23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="52" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#6a1b9a;" edge="1" parent="1" source="31" target="40">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="53" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#6a1b9a;" edge="1" parent="1" source="30" target="40">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="54" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#1f4e79;" edge="1" parent="1" source="40" target="41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="55" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#1f4e79;" edge="1" parent="1" source="40" target="42">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="56" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#1f4e79;" edge="1" parent="1" source="41" target="43">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="57" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#1f4e79;" edge="1" parent="1" source="42" target="43">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="58" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#0d47a1;" edge="1" parent="1" source="43" target="44">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="59" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450;dashed=1;" edge="1" parent="1" source="24" target="45">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="60" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450;dashed=1;" edge="1" parent="1" source="44" target="45">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

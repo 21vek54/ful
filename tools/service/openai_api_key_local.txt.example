@@ -1,0 +1,3 @@
+# Local OpenAI API key for bench autorun loop.
+# Copy this file to openai_api_key_local.txt and put your real key.
+OPENAI_API_KEY=sk-REPLACE_ME

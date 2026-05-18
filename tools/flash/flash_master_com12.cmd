@@ -1,8 +1,16 @@
 @echo off
 setlocal
 chcp 65001 >nul
-cd /d "%~dp0..\..\firmware\master_control_com12"
-echo [FLASH] master_control_com12 (COM12)
+set "PROJECT_DIR=%~dp0..\..\archive\firmware\master_control_com12_legacy_2026-03-25"
+cd /d "%PROJECT_DIR%"
+if errorlevel 1 (
+  echo [ERROR] Не найден production-каталог COM12: "%PROJECT_DIR%"
+  pause
+  exit /b 1
+)
+echo [FLASH] COM12 production master (version_5)
+echo [FLASH] Source: %CD%
+echo [INFO] Minimal firmware/master_control_com12 не используется для production-прошивки.
 pio run -t upload
 set ERR=%ERRORLEVEL%
 if not "%ERR%"=="0" (

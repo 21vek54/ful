@@ -1,4 +1,7 @@
-﻿#include <Arduino.h>
+// Production legacy master COM12: orchestrates COMMON, pause-contract and field diagnostics for the line.
+// Здесь живет актуальный runtime мастера, включая новый request -> wait ready -> finalize pause-контракт.
+
+#include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,9 +101,13 @@ constexpr uint16_t DEVICE_MAGIC = 0x4659;
 constexpr uint16_t DEVICE_PROTO_VER = 1;
 constexpr uint16_t DEVICE_KIND_CONVEYOR = 1;
 constexpr uint16_t DEVICE_KIND_MANIPULATOR = 2;
+constexpr uint16_t DEVICE_STATUS_BUSY_BIT = 1U << 1;
+constexpr uint16_t DEVICE_STATUS_ALARM_BIT = 1U << 3;
 constexpr uint16_t CONVEYOR_STATUS_PROGRAM1_ACTIVE_BIT = 1U << 5;
 constexpr uint16_t CONVEYOR_STATUS_BATCH_READY_BIT = 1U << 6;
 constexpr uint16_t CONVEYOR_STATUS_STEP2_ACTIVE_BIT = 1U << 7;
+constexpr uint16_t CONVEYOR_STATUS_OUTFEED_READY_FOR_BATCH_BIT = 1U << 15;
+constexpr uint16_t CONVEYOR_ERROR_POST7_MANUAL_RECOVERY_REQUIRED_BIT = 1U << 2;
 constexpr uint16_t CONVEYOR_EXTRA0_FLAG_MASK = 0x0003U;
 constexpr uint16_t CONVEYOR_EXTRA0_SEALER_SEQ_LOW_SHIFT = 2U;
 constexpr uint16_t CONVEYOR_EXTRA0_SEALER_SEQ_LOW_MASK = 0x003FU;
@@ -117,9 +124,12 @@ constexpr uint16_t CONVEYOR_EXTRA2_FEED_SIDE_EMPTY_VALID_BIT = 1U << 15;
 constexpr uint8_t CONVEYOR_EXTRA2_PROGRAM_PASS_MASK = 0x3FU;
 constexpr uint16_t MANIPULATOR_STATUS_STEP7_READY_BIT = 1U << 5;
 constexpr uint16_t MANIPULATOR_STATUS_STEP3_READY_BIT = 1U << 6;
-constexpr uint16_t MANIPULATOR_SENSOR_RIGHT_BIT = 1U << 1;
-constexpr uint16_t MANIPULATOR_SENSOR_ZUP_BIT = 1U << 2;
+constexpr uint16_t MANIPULATOR_STATUS_WORK_START_READY_BIT = 1U << 7;
+constexpr uint16_t MANIPULATOR_STATUS_NEEDS_GRIP_OPEN_ONLY_BIT = 1U << 8;
+constexpr uint16_t MANIPULATOR_SENSOR_RIGHT_LIMIT_BIT = 1U << 1;
+constexpr uint16_t MANIPULATOR_SENSOR_Z_UP_BIT = 1U << 2;
 constexpr uint16_t MANIPULATOR_SENSOR_GRIP_OPEN_BIT = 1U << 4;
+constexpr uint16_t MANIPULATOR_SENSOR_GRIP_CLOSED_BIT = 1U << 5;
 
 struct __attribute__((packed)) ManagedDeviceI2cFrame {
     uint16_t magic;
@@ -171,6 +181,36 @@ constexpr uint32_t OTVOD_WORK_VFD_TIMEOUT_MARGIN_MS = 4000;
 constexpr uint32_t OTVOD_WORK_VFD_TIMEOUT_FALLBACK_MS = 15000;
 constexpr uint32_t COMMON_CYCLE_SEAL_SETTLE_MS = 1000;
 constexpr uint32_t COMMON_DIAG_WAIT_LOG_MS = 15000;
+constexpr uint32_t COMMON_WAIT_MANIP_READY_TIMEOUT_MS = 12000;
+constexpr uint32_t COMMON_WAIT_OUTFEED_READY_TIMEOUT_MS = 30000;
+constexpr uint32_t COMMON_ABORT_DRAIN_TIMEOUT_MS = 45000;
+constexpr uint32_t COMMON_ABORT_DRAIN_NO_PROGRESS_MS = 12000;
+constexpr uint32_t COMMON_ABORT_DRAIN_WAIT_LOG_MS = 5000;
+constexpr uint32_t COMMON_ABORT_DRAIN_SETTLE_MS = 500;
+constexpr uint8_t COMMON_ABORT_DRAIN_SETTLE_MIN_CHECKS = 2;
+constexpr uint32_t COMMON_REFILL_RETRY_GUARD_MS = RS485_SCAN_STEP_INTERVAL_MS + 250;
+constexpr uint32_t COMMON_PAUSE_STRICT_SNAPSHOT_SYNC_RETRY_MS = 1000;
+constexpr uint32_t COMMON_PAUSE_STRICT_SNAPSHOT_FORCE_DRAIN_MS = 8000;
+constexpr uint32_t COMMON_PAUSE_ARMING_TIMEOUT_MS = 45000;
+constexpr uint32_t COMMON_PAUSE_ARMING_NO_PROGRESS_MS = 12000;
+constexpr uint32_t COMMON_PAUSE_ARMING_WAIT_LOG_MS = 5000;
+constexpr uint32_t COMMON_PAUSE_MANDATORY_UNLOAD_TIMEOUT_MS = 90000;
+constexpr uint32_t COMMON_PAUSE_STATUS_POLL_MS = 1000;
+constexpr int16_t COMMON_PAUSE_SEALER_RESIDUAL_COUNT = 6;
+constexpr uint32_t COMMON_PAUSE_NODE_FRAME_STALE_MS = 900;
+constexpr uint32_t COMMON_PAUSE_MANDATORY_UNLOAD_BUSY_HEARTBEAT_MS = 3000;
+constexpr uint32_t COMMON_PAUSE_NODE_PREPARING_HEARTBEAT_MS = 3000;
+constexpr uint32_t COMMON_PAUSE_FINALIZE_ACTIVITY_HEARTBEAT_MS = 3000;
+constexpr uint32_t COMMON_PAUSE_FILL_LAST_BLOCK_DECISION_MS = 3000;
+constexpr uint16_t CONVEYOR_ERROR_PAUSE_STATUS_ACK_VALID_BIT = 1U << 3;
+constexpr uint32_t CONVEYOR_HEARTBEAT_PAUSE_STATE_SHIFT = 30U;
+constexpr uint32_t CONVEYOR_HEARTBEAT_PAUSE_EXT_VALID_BIT = 1U << 29U;
+constexpr uint32_t CONVEYOR_HEARTBEAT_RESIDUAL_KNOWN_BIT = 1U << 28U;
+constexpr uint8_t CONVEYOR_HEARTBEAT_PAUSE_COUNT_UNKNOWN = 0x0FU;
+constexpr uint16_t MANIPULATOR_ERROR_PAUSE_STATUS_ACK_VALID_BIT = 1U << 5;
+#ifndef MASTER_COMMON_TRACE_DEBUG
+#define MASTER_COMMON_TRACE_DEBUG 0
+#endif
 constexpr uint32_t SEAL_START_PULSE_MS_DEFAULT = 300;
 constexpr uint32_t SEAL_START_PULSE_MS_MIN = 50;
 constexpr uint32_t SEAL_START_PULSE_MS_MAX = 5000;
@@ -193,6 +233,7 @@ struct Rs485DeviceState {
     uint16_t extra1 = 0;
     uint16_t extra2 = 0;
     uint16_t extra3 = 0;
+    uint32_t managedHeartbeatMs = 0;
     float vfdRunHz = 0.0F;
     uint16_t vfdFault = 0;
 };
@@ -239,24 +280,188 @@ enum class CommonPauseState : uint8_t {
     None = 0,
     Requested = 1,
     FillLastBlock = 2,
-    StableWait = 3
+    StableWait = 3,
+    WaitStrictFeedSnapshot = 4
+};
+
+enum class CommonRefillLaunchResult : uint8_t {
+    Failed = 0,
+    AlreadyReady = 1,
+    AlreadyProgram1Active = 2,
+    Pending = 3,
+    SkippedBusy = 4,
+    Requested = 5
+};
+
+enum class CommonAbortPost7Policy : uint8_t {
+    ForceStop = 0,
+    AllowDrainToSafe = 1
+};
+
+enum class CommonAbortPost7Decision : uint8_t {
+    ForceStop = 0,
+    SkipAlreadySettled = 1,
+    SkipDrainToSafe = 2
+};
+
+enum class CommonRuntimeState : uint8_t {
+    Idle = 0,
+    Active = 1,
+    CommonAborted = 2,
+    ManualRecoveryRequired = 3
+};
+
+enum class CommonPauseRuntimeState : uint8_t {
+    None = 0,
+    PauseArming = 1,
+    PauseHold = 2,
+    PauseEmpty = 3,
+    ManualRecoveryRequired = 4
+};
+
+enum class CommonPauseNodeState : uint8_t {
+    None = 0,
+    Requested = 1,
+    Preparing = 2,
+    Ready = 3,
+    BlockedFault = 4
+};
+
+enum class PauseCountSource : uint8_t {
+    None = 0,
+    TrustedWire = 1,
+    TrustedWireUnknown = 2,
+    SurrogateFeedFlags = 3,
+    SurrogateSealerSignals = 4
+};
+
+enum class CommonAbortDrainOutcome : uint8_t {
+    None = 0,
+    InProgress = 1,
+    ForcedStop = 2,
+    DrainedToSafe = 3,
+    LocalFault = 4,
+    Timeout = 5,
+    NoProgress = 6,
+    LostSupervision = 7
 };
 
 struct CommonCycleState {
     bool active = false;
     bool pauseRequested = false;
+    bool step3Seen = false;
     bool step3LaunchDone = false;
     bool parallelLaunchDone = false;
+    bool refillStartPending = false;
     bool currentCycleLoadsSealer = false;
+    bool outfeedStartIssued = false;
+    bool outfeedNotReadyObserved = false;
+    uint32_t cycleId = 0;
+    uint8_t outfeedStep2SeqBase = 0;
     bool sealerDonePendingUnload = false;
     CommonPauseState pauseState = CommonPauseState::None;
     CommonCycleStage stage = CommonCycleStage::Idle;
     uint16_t lastConsumedBatchSeq = 0;
     uint32_t manipStarts = 0;
     uint32_t parallelStarts = 0;
-    uint32_t sealStartedMs = 0;
+    uint32_t refillStartRequestedMs = 0;
+    uint32_t outfeedStartedMs = 0;
+    uint32_t pauseStrictSnapshotSinceMs = 0;
+    uint32_t pauseStrictSnapshotRetryMs = 0;
+    uint8_t post7SealerCompletionSeqBase = 0;
+    bool pauseStrictSnapshotForceDrain = false;
+    bool pauseForceDrainApplied = false;
+    bool pauseStrictSnapshotRawReadyIgnoredLogged = false;
+    bool pauseStrictGateLatched = false;
+    bool pauseStrictRollbackBlockedLogged = false;
+    CommonRuntimeState runtimeState = CommonRuntimeState::Idle;
+    CommonAbortDrainOutcome abortDrainOutcome = CommonAbortDrainOutcome::None;
+    bool abortDrainActive = false;
+    bool abortFsinvPending = false;
+    bool abortRequiresManualRecovery = false;
+    bool abortDrainLastOutfeedReady = false;
+    bool abortDrainLastStep2Active = false;
+    bool abortDrainLastVfdActive = false;
+    uint32_t abortDrainStartedMs = 0;
+    uint32_t abortDrainLastProgressMs = 0;
+    uint32_t abortDrainLastWaitLogMs = 0;
+    uint8_t abortDrainLastStep2Seq = 0;
+    uint8_t abortDrainLastSealerSeq = 0;
+    bool abortDrainSettleActive = false;
+    uint32_t abortDrainSettleSinceMs = 0;
+    uint8_t abortDrainSettleChecks = 0;
+    String abortReason;
     String manipStartReason;
     String lastEvent = "idle";
+};
+
+struct CommonPauseSnapshot {
+    uint32_t pauseEpoch = 0;
+    uint32_t pauseCycleId = 0;
+    CommonPauseRuntimeState pauseState = CommonPauseRuntimeState::None;
+    CommonPauseNodeState nodeState = CommonPauseNodeState::None;
+    bool nodeStateFresh = false;
+    int16_t bufferCount = 0;
+    bool bufferCountValid = false;
+    int16_t sealerCount = 0;
+    bool sealerCountValid = false;
+    bool sealerResidualKnown = false;
+    bool bufferCountFresh = false;
+    bool sealerCountFresh = false;
+    PauseCountSource bufferCountSource = PauseCountSource::None;
+    PauseCountSource sealerCountSource = PauseCountSource::None;
+    bool nodePauseEpochConfirmed = false;
+    bool contractSnapshotTrusted = false;
+    bool manualRecoveryRequired = false;
+    bool progressObserved = false;
+    uint32_t updatedMs = 0;
+};
+
+struct CommonPauseRuntime {
+    CommonPauseRuntimeState state = CommonPauseRuntimeState::None;
+    uint32_t currentEpoch = 0;
+    uint32_t pauseCycleId = 0;
+    uint32_t armingSinceMs = 0;
+    uint32_t lastProgressMs = 0;
+    uint32_t lastStatusPollMs = 0;
+    bool progressObserved = false;
+    CommonPauseState lastLegacyPauseState = CommonPauseState::None;
+    CommonPauseNodeState lastConveyorNodeState = CommonPauseNodeState::None;
+    int16_t lastBufferCount = 0;
+    bool lastBufferCountValid = false;
+    int16_t lastSealerCount = 0;
+    bool lastSealerCountValid = false;
+    PauseCountSource lastBufferCountSource = PauseCountSource::None;
+    PauseCountSource lastSealerCountSource = PauseCountSource::None;
+    bool armSentConveyor = false;
+    bool armSentManipulator = false;
+    bool releaseSentConveyor = false;
+    bool releaseSentManipulator = false;
+    bool lastNodePauseEpochConfirmed = false;
+    bool nodeReadyConfirmed = false;
+    bool finalizeStarted = false;
+    bool mandatoryUnloadActive = false;
+    uint32_t mandatoryUnloadSinceMs = 0;
+    uint32_t mandatoryUnloadLastProgressMs = 0;
+    uint32_t lastWatchdogWaitLogMs = 0;
+    bool lastConveyorBusy = false;
+    bool lastManipulatorBusy = false;
+    uint8_t lastManipulatorWorkStep = 0;
+    bool lastOutfeedReady = false;
+    bool lastOutfeedStep2Active = false;
+    bool lastOutfeedVfdActive = false;
+    uint8_t lastOutfeedStep2Seq = 0;
+    uint8_t lastOutfeedSealerSeq = 0;
+    bool lastFillLastBlockCompleted = false;
+    bool fillLastBlockCompletionLatched = false;
+    uint32_t fillLastBlockBlockedSinceMs = 0;
+    bool fillLastBlockBlockedLogged = false;
+    bool watchdogPolicyKnown = false;
+    bool lastWatchdogPolicyMandatoryUnload = false;
+    bool lastWatchdogPolicyMandatoryInFlight = false;
+    bool lastWatchdogPolicyForceDrainStableWait = false;
+    CommonPauseSnapshot conveyorSnapshot = {};
+    CommonPauseSnapshot manipulatorSnapshot = {};
 };
 
 struct I2cDiagState {
@@ -356,6 +561,8 @@ uint32_t g_sealStartPulseDurationMs = SEAL_START_PULSE_MS_DEFAULT;
 uint8_t g_sealCompletionSeqLast = 0;
 OtvodWorkCycleState g_otvodWorkCycle;
 CommonCycleState g_commonCycle;
+CommonPauseRuntime g_pauseRuntime;
+uint32_t g_commonCycleIdCounter = 0;
 CommonCycleStage g_commonDiagLastStage = CommonCycleStage::Idle;
 uint32_t g_commonDiagStageSinceMs = 0;
 uint32_t g_commonDiagLastWaitLogMs = 0;
@@ -373,6 +580,29 @@ bool startOtvodWorkCycle(uint8_t totalCycles = OTVOD_WORK_TOTAL_CYCLES,
                          uint32_t stepSteps = OTVOD_WORK_STEP_STEPS,
                          float legacyVfdDistanceCm = 0.0F);
 bool startCommonConveyorProgram1(const String &reason);
+bool commonPauseRuntimeCanRelease();
+bool commonPauseFillLastBlockCompleted(const Rs485DeviceState &conveyor,
+                                       const Rs485DeviceState &manipulator);
+bool commonPauseContractDrainIdle(const Rs485DeviceState &conveyor,
+                                  const Rs485DeviceState &manipulator,
+                                  uint32_t nowMs);
+const char *commonPauseRuntimeSubstateName(const Rs485DeviceState &conveyor,
+                                           const Rs485DeviceState &manipulator);
+bool commonPauseRuntimeMandatoryUnloadInFlight(const Rs485DeviceState &conveyor,
+                                               const Rs485DeviceState &manipulator);
+bool commonPauseRuntimeMandatoryUnloadPolicyActive();
+bool commonPauseRuntimeForceDrainStableWaitPolicyActive();
+bool commonPauseRuntimeWatchdogActive();
+uint32_t commonPauseRuntimeMandatoryUnloadElapsedMs(uint32_t nowMs);
+const char *commonPauseRuntimeWatchdogProfileName(bool mandatoryUnloadPolicyActive);
+const char *commonPauseRuntimeWatchdogPolicyReason(bool mandatoryUnloadPolicyActive,
+                                                   bool mandatoryUnloadInFlight);
+void commonSetEventIfChanged(const String &eventText);
+void commonPauseRuntimeMarkMandatoryUnloadStarted(uint32_t nowMs);
+void commonPauseRuntimeClearMandatoryUnloadTracking();
+void commonPauseRuntimeRestartArmingWindow(uint32_t nowMs, const char *reason);
+uint32_t commonPauseRuntimeArmingElapsedMs(uint32_t nowMs);
+uint32_t commonPauseRuntimeNoProgressMs(uint32_t nowMs);
 
 const char *commonCycleStageName(CommonCycleStage stage)
 {
@@ -400,10 +630,125 @@ const char *commonPauseStateName(CommonPauseState state)
             return "pause_fill_last_block";
         case CommonPauseState::StableWait:
             return "pause_stable_wait";
+        case CommonPauseState::WaitStrictFeedSnapshot:
+            return "pause_wait_strict_snapshot";
         case CommonPauseState::None:
         default:
             return "none";
     }
+}
+
+const char *commonRuntimeStateName(CommonRuntimeState state)
+{
+    switch (state) {
+        case CommonRuntimeState::Active:
+            return "active";
+        case CommonRuntimeState::CommonAborted:
+            return "common_aborted";
+        case CommonRuntimeState::ManualRecoveryRequired:
+            return "manual_recovery_required";
+        case CommonRuntimeState::Idle:
+        default:
+            return "idle";
+    }
+}
+
+const char *commonPauseRuntimeStateName(CommonPauseRuntimeState state)
+{
+    switch (state) {
+        case CommonPauseRuntimeState::PauseArming:
+            return "pause_arming";
+        case CommonPauseRuntimeState::PauseHold:
+            return "pause_hold";
+        case CommonPauseRuntimeState::PauseEmpty:
+            return "pause_empty";
+        case CommonPauseRuntimeState::ManualRecoveryRequired:
+            return "manual_recovery_required";
+        case CommonPauseRuntimeState::None:
+        default:
+            return "none";
+    }
+}
+
+const char *commonPauseNodeStateName(CommonPauseNodeState state)
+{
+    switch (state) {
+        case CommonPauseNodeState::Requested:
+            return "requested";
+        case CommonPauseNodeState::Preparing:
+            return "preparing";
+        case CommonPauseNodeState::Ready:
+            return "ready";
+        case CommonPauseNodeState::BlockedFault:
+            return "blocked";
+        case CommonPauseNodeState::None:
+        default:
+            return "none";
+    }
+}
+
+const char *pauseCountSourceName(PauseCountSource source)
+{
+    switch (source) {
+        case PauseCountSource::TrustedWire:
+            return "wire_trusted";
+        case PauseCountSource::TrustedWireUnknown:
+            return "wire_unknown";
+        case PauseCountSource::SurrogateFeedFlags:
+            return "surrogate_feed_flags";
+        case PauseCountSource::SurrogateSealerSignals:
+            return "surrogate_sealer_signals";
+        case PauseCountSource::None:
+        default:
+            return "none";
+    }
+}
+
+const char *commonAbortDrainOutcomeName(CommonAbortDrainOutcome outcome)
+{
+    switch (outcome) {
+        case CommonAbortDrainOutcome::InProgress:
+            return "in_progress";
+        case CommonAbortDrainOutcome::ForcedStop:
+            return "forced_stop";
+        case CommonAbortDrainOutcome::DrainedToSafe:
+            return "drained_to_safe";
+        case CommonAbortDrainOutcome::LocalFault:
+            return "local_fault";
+        case CommonAbortDrainOutcome::Timeout:
+            return "timeout";
+        case CommonAbortDrainOutcome::NoProgress:
+            return "no_progress";
+        case CommonAbortDrainOutcome::LostSupervision:
+            return "lost_supervision";
+        case CommonAbortDrainOutcome::None:
+        default:
+            return "none";
+    }
+}
+
+const char *commonCoarseStateName()
+{
+    if (g_commonCycle.abortDrainActive) {
+        return "post7_draining_to_safe";
+    }
+    switch (g_commonCycle.runtimeState) {
+        case CommonRuntimeState::Active:
+            return "common_active";
+        case CommonRuntimeState::CommonAborted:
+            return "common_aborted";
+        case CommonRuntimeState::ManualRecoveryRequired:
+            return "manual_recovery_required";
+        case CommonRuntimeState::Idle:
+        default:
+            return "idle";
+    }
+}
+
+bool commonManualRecoveryRequired()
+{
+    return g_commonCycle.runtimeState == CommonRuntimeState::ManualRecoveryRequired ||
+        g_commonCycle.abortRequiresManualRecovery;
 }
 
 void copyDiagText(char *dst, size_t dstSize, const char *src)
@@ -575,6 +920,8 @@ void loopPrintHeartbeat()
     Serial.print(static_cast<uint32_t>(now - g_loopDiag.currentStageSinceMs));
     Serial.print(", common=");
     Serial.print(commonCycleStageName(g_commonCycle.stage));
+    Serial.print(", common_coarse=");
+    Serial.print(commonCoarseStateName());
     Serial.print(", i2c_seq=");
     Serial.print(g_i2cDiag.opSeq);
     Serial.print(", i2c_active=");
@@ -705,7 +1052,12 @@ void i2cRecoverBus(const char *reason)
 
 bool deviceStatusBusy(const Rs485DeviceState &st)
 {
-    return (st.statusWord & (1U << 1)) != 0;
+    return (st.statusWord & DEVICE_STATUS_BUSY_BIT) != 0;
+}
+
+bool deviceStatusAlarm(const Rs485DeviceState &st)
+{
+    return (st.statusWord & DEVICE_STATUS_ALARM_BIT) != 0;
 }
 
 bool conveyorProgram1Active(const Rs485DeviceState &st)
@@ -769,14 +1121,41 @@ bool conveyorStep2Active(const Rs485DeviceState &st)
     return (st.statusWord & CONVEYOR_STATUS_STEP2_ACTIVE_BIT) != 0;
 }
 
+bool conveyorOutfeedReadyForBatch(const Rs485DeviceState &st)
+{
+    // COM10 production contract: true только когда outfeed полностью settled для COMMON.
+    return (st.statusWord & CONVEYOR_STATUS_OUTFEED_READY_FOR_BATCH_BIT) != 0;
+}
+
+bool conveyorPost7ManualRecoveryRequired(const Rs485DeviceState &st)
+{
+    return (st.errorWord & CONVEYOR_ERROR_POST7_MANUAL_RECOVERY_REQUIRED_BIT) != 0U;
+}
+
 uint8_t conveyorStep2CompletionSeq(const Rs485DeviceState &st)
 {
-    return static_cast<uint8_t>((st.statusWord >> 8) & 0x00FFU);
+    return static_cast<uint8_t>((st.statusWord >> 8) & 0x007FU);
 }
 
 uint16_t conveyorBatchSeq(const Rs485DeviceState &st)
 {
     return static_cast<uint16_t>(st.extra3 & 0x7FFFU);
+}
+
+bool conveyorNextBatchReadyForCommon(const Rs485DeviceState &st, uint16_t lastConsumedBatchSeq)
+{
+    const uint16_t seq = conveyorBatchSeq(st);
+    return conveyorBatchReady(st) &&
+           seq != 0U &&
+           seq != lastConsumedBatchSeq;
+}
+
+bool conveyorReadyBatchIsStaleForCommon(const Rs485DeviceState &st, uint16_t lastConsumedBatchSeq)
+{
+    const uint16_t seq = conveyorBatchSeq(st);
+    return conveyorBatchReady(st) &&
+           seq != 0U &&
+           seq == lastConsumedBatchSeq;
 }
 
 uint8_t conveyorProgramStateCode(const Rs485DeviceState &st)
@@ -797,6 +1176,67 @@ bool conveyorFeedSideEmptyStrict(const Rs485DeviceState &st)
 bool conveyorFeedSideEmptyValid(const Rs485DeviceState &st)
 {
     return (st.extra2 & CONVEYOR_EXTRA2_FEED_SIDE_EMPTY_VALID_BIT) != 0U;
+}
+
+bool conveyorPauseHeartbeatExtValid(uint32_t hb)
+{
+    return (hb & CONVEYOR_HEARTBEAT_PAUSE_EXT_VALID_BIT) != 0U;
+}
+
+bool conveyorPauseStatusAckValid(const Rs485DeviceState &st)
+{
+    return (st.errorWord & CONVEYOR_ERROR_PAUSE_STATUS_ACK_VALID_BIT) != 0U;
+}
+
+uint16_t conveyorPauseStatusAckEpoch(const Rs485DeviceState &st)
+{
+    return static_cast<uint16_t>((st.errorWord >> 4) & 0x0FFFU);
+}
+
+bool manipulatorPauseStatusAckValid(const Rs485DeviceState &st)
+{
+    return (st.errorWord & MANIPULATOR_ERROR_PAUSE_STATUS_ACK_VALID_BIT) != 0U;
+}
+
+uint16_t manipulatorPauseStatusAckEpoch(const Rs485DeviceState &st)
+{
+    return static_cast<uint16_t>((st.errorWord >> 6) & 0x03FFU);
+}
+
+void conveyorUnpackPauseHeartbeat(uint32_t hb,
+                                  int16_t &bufferCount,
+                                  bool &bufferCountValid,
+                                  int16_t &sealerCount,
+                                  bool &sealerCountValid,
+                                  bool &residualKnown)
+{
+    const uint8_t wireBuffer = static_cast<uint8_t>((hb >> 20) & 0x0FU);
+    const uint8_t wireSealer = static_cast<uint8_t>((hb >> 24) & 0x0FU);
+    bufferCountValid = wireBuffer != CONVEYOR_HEARTBEAT_PAUSE_COUNT_UNKNOWN;
+    sealerCountValid = wireSealer != CONVEYOR_HEARTBEAT_PAUSE_COUNT_UNKNOWN;
+    bufferCount = bufferCountValid ? static_cast<int16_t>(wireBuffer) : -1;
+    sealerCount = sealerCountValid ? static_cast<int16_t>(wireSealer) : -1;
+    residualKnown = (hb & CONVEYOR_HEARTBEAT_RESIDUAL_KNOWN_BIT) != 0U;
+}
+
+CommonPauseNodeState conveyorPauseHeartbeatNodeState(uint32_t hb)
+{
+    if (!conveyorPauseHeartbeatExtValid(hb)) {
+        return CommonPauseNodeState::None;
+    }
+
+    switch ((hb >> CONVEYOR_HEARTBEAT_PAUSE_STATE_SHIFT) & 0x03U) {
+        case 0U:
+            return CommonPauseNodeState::Requested;
+        case 1U:
+            return CommonPauseNodeState::Preparing;
+        case 2U:
+            return CommonPauseNodeState::Ready;
+        case 3U:
+            return CommonPauseNodeState::BlockedFault;
+        default:
+            return CommonPauseNodeState::None;
+    }
 }
 
 uint16_t manipulatorSensorBits(const Rs485DeviceState &st)
@@ -826,19 +1266,27 @@ bool manipulatorStep3Ready(const Rs485DeviceState &st)
 
 bool manipulatorInWorkStartPose(const Rs485DeviceState &st)
 {
-    const uint16_t bits = manipulatorSensorBits(st);
-    const uint16_t need = MANIPULATOR_SENSOR_RIGHT_BIT |
-                          MANIPULATOR_SENSOR_ZUP_BIT |
-                          MANIPULATOR_SENSOR_GRIP_OPEN_BIT;
-    return (bits & need) == need;
+    return (st.statusWord & MANIPULATOR_STATUS_WORK_START_READY_BIT) != 0;
 }
 
 bool manipulatorNeedsOnlyGripOpenForWorkStart(const Rs485DeviceState &st)
 {
-    const uint16_t bits = manipulatorSensorBits(st);
-    const uint16_t posBits = MANIPULATOR_SENSOR_RIGHT_BIT | MANIPULATOR_SENSOR_ZUP_BIT;
-    return (bits & posBits) == posBits &&
-           (bits & MANIPULATOR_SENSOR_GRIP_OPEN_BIT) == 0;
+    return (st.statusWord & MANIPULATOR_STATUS_NEEDS_GRIP_OPEN_ONLY_BIT) != 0;
+}
+
+bool manipulatorWorkStartGripUnknown(const Rs485DeviceState &st)
+{
+    const uint16_t sensorBits = manipulatorSensorBits(st);
+    const bool rightAndZUp =
+        (sensorBits & (MANIPULATOR_SENSOR_RIGHT_LIMIT_BIT | MANIPULATOR_SENSOR_Z_UP_BIT)) ==
+        (MANIPULATOR_SENSOR_RIGHT_LIMIT_BIT | MANIPULATOR_SENSOR_Z_UP_BIT);
+    const bool gripKnown =
+        (sensorBits & (MANIPULATOR_SENSOR_GRIP_OPEN_BIT | MANIPULATOR_SENSOR_GRIP_CLOSED_BIT)) != 0U;
+
+    return rightAndZUp &&
+        !gripKnown &&
+        !manipulatorInWorkStartPose(st) &&
+        !manipulatorNeedsOnlyGripOpenForWorkStart(st);
 }
 
 bool conveyorSealerOnline()
@@ -1015,19 +1463,131 @@ void printCommonCycleStatus()
 {
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
     const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    const bool conveyorHasReadyBatch = conveyorBatchReady(conveyor);
+    const uint16_t conveyorReadySeq = conveyorBatchSeq(conveyor);
+    const bool conveyorNextBatchReady = conveyorNextBatchReadyForCommon(
+        conveyor,
+        g_commonCycle.lastConsumedBatchSeq);
+    const bool conveyorReadyBatchStale = conveyorReadyBatchIsStaleForCommon(
+        conveyor,
+        g_commonCycle.lastConsumedBatchSeq);
     const uint32_t nowMs = millis();
     const uint32_t sealAgeMs = (g_sealDoneLastRiseMs == 0)
         ? 0
         : static_cast<uint32_t>(nowMs - g_sealDoneLastRiseMs);
+    const uint32_t drainElapsedMs = g_commonCycle.abortDrainActive
+        ? static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainStartedMs)
+        : 0U;
+    const uint32_t drainNoProgressMs = g_commonCycle.abortDrainActive
+        ? static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainLastProgressMs)
+        : 0U;
+    const bool pauseMandatoryUnloadInFlight =
+        commonPauseRuntimeMandatoryUnloadInFlight(conveyor, manipulator);
+    const bool pauseMandatoryUnloadPolicyActive =
+        commonPauseRuntimeMandatoryUnloadPolicyActive();
+    const bool pauseForceDrainStableWaitPolicyActive =
+        commonPauseRuntimeForceDrainStableWaitPolicyActive();
+    const uint32_t pauseMandatoryUnloadElapsedMs =
+        commonPauseRuntimeMandatoryUnloadElapsedMs(nowMs);
+    const char *pauseWatchdogProfile = commonPauseRuntimeWatchdogProfileName(
+        pauseMandatoryUnloadPolicyActive);
+    const char *pauseWatchdogPolicyReason = commonPauseRuntimeWatchdogPolicyReason(
+        pauseMandatoryUnloadPolicyActive,
+        pauseMandatoryUnloadInFlight);
 
     Serial.print("COMMON: active=");
     Serial.print(g_commonCycle.active ? "yes" : "no");
+    Serial.print(", coarse_state=");
+    Serial.print(commonCoarseStateName());
+    Serial.print(", runtime_state=");
+    Serial.print(commonRuntimeStateName(g_commonCycle.runtimeState));
+    Serial.print(", manual_recovery_required=");
+    Serial.print(commonManualRecoveryRequired() ? "yes" : "no");
     Serial.print(", pause=");
     Serial.print(g_commonCycle.pauseRequested ? "yes" : "no");
     Serial.print(", pause_state=");
+    Serial.print(commonPauseRuntimeStateName(g_pauseRuntime.state));
+    Serial.print(", pause_legacy_state=");
     Serial.print(commonPauseStateName(g_commonCycle.pauseState));
+    Serial.print(", pause_runtime=");
+    Serial.print(commonPauseRuntimeStateName(g_pauseRuntime.state));
+    Serial.print(", pause_epoch=");
+    Serial.print(g_pauseRuntime.currentEpoch);
+    Serial.print(", pause_cycle_id=");
+    Serial.print(g_pauseRuntime.pauseCycleId);
+    Serial.print(", pause_can_release=");
+    Serial.print(commonPauseRuntimeCanRelease() ? "yes" : "no");
+    Serial.print(", pause_arming_elapsed_ms=");
+    Serial.print(commonPauseRuntimeArmingElapsedMs(nowMs));
+    Serial.print(", pause_no_progress_ms=");
+    Serial.print(commonPauseRuntimeNoProgressMs(nowMs));
+    Serial.print(", pause_arming_timeout_limit_ms=");
+    Serial.print(pauseMandatoryUnloadPolicyActive
+        ? COMMON_PAUSE_MANDATORY_UNLOAD_TIMEOUT_MS
+        : COMMON_PAUSE_ARMING_TIMEOUT_MS);
+    Serial.print(", pause_watchdog_active=");
+    Serial.print(commonPauseRuntimeWatchdogActive() ? "yes" : "no");
+    Serial.print(", pause_watchdog_profile=");
+    Serial.print(pauseWatchdogProfile);
+    Serial.print(", pause_substate=");
+    Serial.print(commonPauseRuntimeSubstateName(conveyor, manipulator));
+    Serial.print(", pause_watchdog_policy_reason=");
+    Serial.print(pauseWatchdogPolicyReason);
+    Serial.print(", pause_force_drain_stable_wait_policy=");
+    Serial.print(pauseForceDrainStableWaitPolicyActive ? "yes" : "no");
+    Serial.print(", pause_no_progress_guard=");
+    Serial.print(pauseMandatoryUnloadPolicyActive ? "hold" : "normal");
+    Serial.print(", pause_mandatory_unload_active=");
+    Serial.print(g_pauseRuntime.mandatoryUnloadActive ? "yes" : "no");
+    Serial.print(", pause_mandatory_unload_in_flight=");
+    Serial.print(pauseMandatoryUnloadInFlight ? "yes" : "no");
+    Serial.print(", pause_mandatory_unload_elapsed_ms=");
+    Serial.print(pauseMandatoryUnloadElapsedMs);
+    Serial.print(", buffer_count=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCount);
+    Serial.print(", buffer_count_valid=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "yes" : "no");
+    Serial.print(", buffer_count_source=");
+    Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+    Serial.print(", sealer_count=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCount);
+    Serial.print(", sealer_count_valid=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "yes" : "no");
+    Serial.print(", sealer_count_source=");
+    Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+    Serial.print(", sealer_residual_known=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.sealerResidualKnown ? "yes" : "no");
+    Serial.print(", buffer_count_fresh=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountFresh ? "yes" : "no");
+    Serial.print(", sealer_count_fresh=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountFresh ? "yes" : "no");
+    Serial.print(", pause_node_epoch_confirmed=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "yes" : "no");
+    Serial.print(", pause_contract_trusted=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.contractSnapshotTrusted ? "yes" : "no");
+    Serial.print(", pause_node_state=");
+    Serial.print(commonPauseNodeStateName(g_pauseRuntime.conveyorSnapshot.nodeState));
+    Serial.print(", pause_node_state_fresh=");
+    Serial.print(g_pauseRuntime.conveyorSnapshot.nodeStateFresh ? "yes" : "no");
+    Serial.print(", pause_node_ready_confirmed=");
+    Serial.print(g_pauseRuntime.nodeReadyConfirmed ? "yes" : "no");
+    Serial.print(", pause_finalize_started=");
+    Serial.print(g_pauseRuntime.finalizeStarted ? "yes" : "no");
+    const bool pauseFillLastBlockBlocked =
+        g_pauseRuntime.fillLastBlockBlockedSinceMs != 0;
+    Serial.print(", pause_fill_last_block_blocked=");
+    Serial.print(pauseFillLastBlockBlocked ? "yes" : "no");
+    Serial.print(", pause_fill_last_block_blocked_ms=");
+    Serial.print(
+        pauseFillLastBlockBlocked
+            ? static_cast<uint32_t>(nowMs - g_pauseRuntime.fillLastBlockBlockedSinceMs)
+            : 0U);
+    Serial.print(", pause_progress_observed=");
+    Serial.print(g_pauseRuntime.progressObserved ? "yes" : "no");
     Serial.print(", stage=");
     Serial.print(commonCycleStageName(g_commonCycle.stage));
+    Serial.print(", cycle_id=");
+    Serial.print(g_commonCycle.cycleId);
     Serial.print(", manip_starts=");
     Serial.print(g_commonCycle.manipStarts);
     Serial.print(", parallel_starts=");
@@ -1035,9 +1595,13 @@ void printCommonCycleStatus()
     Serial.print(", batch_seq=");
     Serial.print(g_commonCycle.lastConsumedBatchSeq);
     Serial.print(", conveyor_ready=");
-    Serial.print(conveyorBatchReady(conveyor) ? "yes" : "no");
+    Serial.print(conveyorHasReadyBatch ? "yes" : "no");
     Serial.print(", conveyor_seq=");
-    Serial.print(conveyorBatchSeq(conveyor));
+    Serial.print(conveyorReadySeq);
+    Serial.print(", conveyor_next_ready=");
+    Serial.print(conveyorNextBatchReady ? "yes" : "no");
+    Serial.print(", conveyor_ready_stale=");
+    Serial.print(conveyorReadyBatchStale ? "yes" : "no");
     Serial.print(", feed_empty_strict=");
     Serial.print(conveyorFeedSideEmptyStrict(conveyor) ? "yes" : "no");
     Serial.print(", feed_empty_valid=");
@@ -1046,8 +1610,26 @@ void printCommonCycleStatus()
     Serial.print(conveyorProgramStateCode(conveyor));
     Serial.print(", conveyor_p1_pass=");
     Serial.print(conveyorProgramPass(conveyor));
+    Serial.print(", step3_seen=");
+    Serial.print(g_commonCycle.step3Seen ? "yes" : "no");
+    Serial.print(", step3_refill_done=");
+    Serial.print(g_commonCycle.step3LaunchDone ? "yes" : "no");
+    Serial.print(", refill_pending=");
+    Serial.print(g_commonCycle.refillStartPending ? "yes" : "no");
+    Serial.print(", refill_pending_ms=");
+    if (g_commonCycle.refillStartPending && g_commonCycle.refillStartRequestedMs != 0) {
+        Serial.print(static_cast<uint32_t>(nowMs - g_commonCycle.refillStartRequestedMs));
+    } else {
+        Serial.print(0);
+    }
     Serial.print(", manip_busy=");
     Serial.print(deviceStatusBusy(manipulator) ? "yes" : "no");
+    Serial.print(", manip_alarm=");
+    Serial.print(deviceStatusAlarm(manipulator) ? "yes" : "no");
+    Serial.print(", manip_start_ready=");
+    Serial.print(manipulatorInWorkStartPose(manipulator) ? "yes" : "no");
+    Serial.print(", manip_q_only=");
+    Serial.print(manipulatorNeedsOnlyGripOpenForWorkStart(manipulator) ? "yes" : "no");
     Serial.print(", manip_step3=");
     Serial.print(manipulatorStep3Ready(manipulator) ? "yes" : "no");
     Serial.print(", manip_step7=");
@@ -1055,9 +1637,34 @@ void printCommonCycleStatus()
     Serial.print(", manip_step=");
     Serial.print(manipulatorWorkStep(manipulator));
     Serial.print(", otvod_ready=");
-    Serial.print(g_otvodWorkCycle.readyForBatch ? "yes" : "no");
+    Serial.print(conveyor.online && conveyor.protocolOk && conveyorOutfeedReadyForBatch(conveyor) ? "yes" : "no");
+    Serial.print(", otvod_seen_not_ready=");
+    Serial.print(g_commonCycle.outfeedNotReadyObserved ? "yes" : "no");
+    Serial.print(", otvod_seq=");
+    Serial.print(conveyorStep2CompletionSeq(conveyor));
+    Serial.print(", otvod_seq_base=");
+    Serial.print(g_commonCycle.outfeedStep2SeqBase);
+    const uint8_t sealerSeq = conveyorSealerCompletionSeq(conveyor);
+    const bool sealerSeqAdvancedForPost7 =
+        sealerSeq != g_commonCycle.post7SealerCompletionSeqBase;
+    Serial.print(", sealer_seq=");
+    Serial.print(sealerSeq);
+    Serial.print(", sealer_seq_base=");
+    Serial.print(g_commonCycle.post7SealerCompletionSeqBase);
+    Serial.print(", sealer_seq_advanced=");
+    Serial.print(sealerSeqAdvancedForPost7 ? "yes" : "no");
     Serial.print(", sealer_done_pending_unload=");
     Serial.print(g_commonCycle.sealerDonePendingUnload ? "yes" : "no");
+    Serial.print(", drain_supervision_active=");
+    Serial.print(g_commonCycle.abortDrainActive ? "yes" : "no");
+    Serial.print(", drain_tail_outcome=");
+    Serial.print(commonAbortDrainOutcomeName(g_commonCycle.abortDrainOutcome));
+    Serial.print(", drain_elapsed_ms=");
+    Serial.print(drainElapsedMs);
+    Serial.print(", drain_no_progress_ms=");
+    Serial.print(drainNoProgressMs);
+    Serial.print(", abort_reason=");
+    Serial.print(g_commonCycle.abortReason);
     Serial.print(", seal_age_ms=");
     Serial.print(sealAgeMs);
     Serial.print(", i2c_last=");
@@ -1100,15 +1707,103 @@ bool commonFeedSideSnapshotKnown(const Rs485DeviceState &conveyor)
     return conveyorFeedSideEmptyValid(conveyor);
 }
 
-void commonSetPauseWaitsStrictFeedSnapshot()
+bool commonPauseStrictGateForwardOnly()
 {
-    g_commonCycle.pauseState = CommonPauseState::Requested;
+    return g_commonCycle.pauseRequested &&
+        g_commonCycle.pauseStrictGateLatched &&
+        g_commonCycle.pauseState != CommonPauseState::StableWait;
+}
+
+void commonLogPauseStrictRollbackBlocked()
+{
+    if (g_commonCycle.pauseStrictRollbackBlockedLogged) {
+        return;
+    }
+    g_commonCycle.pauseStrictRollbackBlockedLogged = true;
+    Serial.println("COMMON: pause strict gate rollback blocked; keep forward-only path.");
+}
+
+void commonResetPauseStrictSnapshotTracking()
+{
+    g_commonCycle.pauseStrictSnapshotSinceMs = 0;
+    g_commonCycle.pauseStrictSnapshotRetryMs = 0;
+    g_commonCycle.pauseStrictSnapshotForceDrain = false;
+    g_commonCycle.pauseStrictSnapshotRawReadyIgnoredLogged = false;
+    if (g_commonCycle.pauseState == CommonPauseState::WaitStrictFeedSnapshot) {
+        g_commonCycle.pauseState = CommonPauseState::Requested;
+    }
+}
+
+void commonSetPauseWaitsStrictFeedSnapshot(uint32_t nowMs)
+{
+    const bool enteringStrictGate =
+        g_commonCycle.pauseState != CommonPauseState::WaitStrictFeedSnapshot;
+    g_commonCycle.pauseState = CommonPauseState::WaitStrictFeedSnapshot;
+    g_commonCycle.pauseStrictGateLatched = true;
+    if (enteringStrictGate) {
+        g_commonCycle.pauseStrictRollbackBlockedLogged = false;
+    }
+    if (g_commonCycle.pauseStrictSnapshotSinceMs == 0) {
+        g_commonCycle.pauseStrictSnapshotSinceMs = nowMs;
+    }
     if (g_commonCycle.lastEvent != "COMMON: pause waits strict feed snapshot") {
         g_commonCycle.lastEvent = "COMMON: pause waits strict feed snapshot";
         g_lastCommandResult = g_commonCycle.lastEvent;
         Serial.println(g_lastCommandResult);
         (void)mqttPublishStatus(false);
     }
+}
+
+bool commonTryBypassPauseStrictSnapshotUnknown(const Rs485DeviceState &conveyor,
+                                               bool nextBatchReadyForCommon,
+                                               uint32_t nowMs)
+{
+    if (!g_commonCycle.pauseStrictSnapshotForceDrain) {
+        commonSetPauseWaitsStrictFeedSnapshot(nowMs);
+    }
+
+    const bool rawBatchReady = conveyorBatchReady(conveyor);
+    const bool rawReadyButNoSeqAwareNextBatch = rawBatchReady && !nextBatchReadyForCommon;
+    if (rawReadyButNoSeqAwareNextBatch && !g_commonCycle.pauseStrictSnapshotRawReadyIgnoredLogged) {
+        g_commonCycle.pauseStrictSnapshotRawReadyIgnoredLogged = true;
+        Serial.println(
+            "COMMON: pause strict snapshot ignores raw batchReady without seq-aware next batch.");
+    } else if (!rawReadyButNoSeqAwareNextBatch) {
+        g_commonCycle.pauseStrictSnapshotRawReadyIgnoredLogged = false;
+    }
+
+    if (!commonPauseStrictGateForwardOnly() &&
+        (conveyorProgram1Active(conveyor) || nextBatchReadyForCommon)) {
+        return false;
+    }
+
+    if (!g_commonCycle.pauseStrictSnapshotForceDrain) {
+        if (g_commonCycle.pauseStrictSnapshotRetryMs == 0 ||
+            static_cast<uint32_t>(nowMs - g_commonCycle.pauseStrictSnapshotRetryMs) >=
+                COMMON_PAUSE_STRICT_SNAPSHOT_SYNC_RETRY_MS) {
+            g_commonCycle.pauseStrictSnapshotRetryMs = nowMs;
+            if (i2cSendManagedDeviceCommand(CONVEYOR_ID, "FSC", "common_pause_fs_sync")) {
+                Serial.println("COMMON: pause strict snapshot sync requested (FSC).");
+            } else {
+                Serial.println("COMMON warning: pause strict snapshot FSC send error.");
+            }
+        }
+    }
+
+    if (!g_commonCycle.pauseStrictSnapshotForceDrain &&
+        g_commonCycle.pauseStrictSnapshotSinceMs != 0 &&
+        static_cast<uint32_t>(nowMs - g_commonCycle.pauseStrictSnapshotSinceMs) >=
+            COMMON_PAUSE_STRICT_SNAPSHOT_FORCE_DRAIN_MS) {
+        g_commonCycle.pauseStrictSnapshotForceDrain = true;
+        g_commonCycle.pauseForceDrainApplied = true;
+        g_commonCycle.pauseState = CommonPauseState::Requested;
+        g_commonCycle.lastEvent = "COMMON: pause strict snapshot timeout, force drain path";
+        g_lastCommandResult = g_commonCycle.lastEvent;
+        Serial.println(g_lastCommandResult);
+        (void)mqttPublishStatus(false);
+    }
+
+    return g_commonCycle.pauseStrictSnapshotForceDrain;
 }
 
 bool commonSealerDoneStable(uint32_t nowMs)
@@ -1119,18 +1814,15 @@ bool commonSealerDoneStable(uint32_t nowMs)
     return static_cast<uint32_t>(nowMs - g_sealDoneLastRiseMs) >= COMMON_CYCLE_SEAL_SETTLE_MS;
 }
 
-bool commonSealerDoneForCurrentCycle(uint32_t nowMs)
+bool commonSealerDoneForCurrentCycle(const Rs485DeviceState &conveyor)
 {
-    if (!commonSealerDoneStable(nowMs)) {
-        return false;
-    }
-    if (g_commonCycle.sealStartedMs == 0) {
+    if (!g_commonCycle.currentCycleLoadsSealer) {
         return true;
     }
-    return g_sealDoneLastRiseMs > g_commonCycle.sealStartedMs;
+    return conveyorSealerCompletionSeq(conveyor) != g_commonCycle.post7SealerCompletionSeqBase;
 }
 
-bool commonSealerEmptyConfirmed(const Rs485DeviceState &conveyor, uint32_t nowMs)
+bool commonSealerEmptyConfirmed(const Rs485DeviceState &conveyor)
 {
     if (g_commonCycle.sealerDonePendingUnload) {
         return false;
@@ -1138,15 +1830,15 @@ bool commonSealerEmptyConfirmed(const Rs485DeviceState &conveyor, uint32_t nowMs
     if (conveyorSealerBusy(conveyor) || conveyorSealerDoneActive(conveyor)) {
         return false;
     }
-    if (g_commonCycle.currentCycleLoadsSealer && !commonSealerDoneForCurrentCycle(nowMs)) {
+    if (g_commonCycle.currentCycleLoadsSealer && !commonSealerDoneForCurrentCycle(conveyor)) {
         return false;
     }
     return true;
 }
 
-bool commonTryEnterPauseStableWait(const Rs485DeviceState &conveyor, uint32_t nowMs)
+bool commonTryEnterPauseStableWait(const Rs485DeviceState &conveyor)
 {
-    if (!commonSealerEmptyConfirmed(conveyor, nowMs)) {
+    if (!commonSealerEmptyConfirmed(conveyor)) {
         g_commonCycle.pauseState = CommonPauseState::Requested;
         if (g_commonCycle.lastEvent != "COMMON: pause waits SEALER empty") {
             g_commonCycle.lastEvent = "COMMON: pause waits SEALER empty";
@@ -1157,34 +1849,1837 @@ bool commonTryEnterPauseStableWait(const Rs485DeviceState &conveyor, uint32_t no
         return false;
     }
 
+    const bool finalizedAfterForceDrain =
+        g_commonCycle.pauseStrictSnapshotForceDrain || g_commonCycle.pauseForceDrainApplied;
+    const uint32_t nowMs = millis();
+    if (g_pauseRuntime.mandatoryUnloadActive) {
+        Serial.print("COMMON: pause mandatory unload settlement complete; ");
+        Serial.print("gate=sealer_empty_confirmed");
+        Serial.print(", sealer_pending_unload=");
+        Serial.print(g_commonCycle.sealerDonePendingUnload ? "yes" : "no");
+        Serial.print(", sealer_busy=");
+        Serial.print(conveyorSealerBusy(conveyor) ? "yes" : "no");
+        Serial.print(", sealer_done_active=");
+        Serial.print(conveyorSealerDoneActive(conveyor) ? "yes" : "no");
+        Serial.print(", sealer_done_for_cycle=");
+        Serial.print(commonSealerDoneForCurrentCycle(conveyor) ? "yes" : "no");
+        Serial.print(", outfeed_ready=");
+        Serial.print(conveyorOutfeedReadyForBatch(conveyor) ? "yes" : "no");
+        Serial.print(", mandatory_unload_elapsed_ms=");
+        Serial.println(commonPauseRuntimeMandatoryUnloadElapsedMs(nowMs));
+    }
+    commonPauseRuntimeClearMandatoryUnloadTracking();
+    commonResetPauseStrictSnapshotTracking();
     g_commonCycle.pauseState = CommonPauseState::StableWait;
-    if (g_commonCycle.lastEvent != "COMMON: pause_stable_wait") {
-        g_commonCycle.lastEvent = "COMMON: pause_stable_wait";
+    const String stableEvent = finalizedAfterForceDrain
+        ? String("COMMON: pause finalized after force drain, strict snapshot gate released")
+        : String("COMMON: pause_stable_wait");
+    if (g_commonCycle.lastEvent != stableEvent) {
+        g_commonCycle.lastEvent = stableEvent;
         g_lastCommandResult = g_commonCycle.lastEvent;
         Serial.println(g_lastCommandResult);
         (void)mqttPublishStatus(false);
     }
+    if (finalizedAfterForceDrain) {
+        commonPauseRuntimeRestartArmingWindow(
+            nowMs,
+            "force_drain_finalized_waits_terminal_outcome");
+    }
     return true;
 }
 
-void abortCommonCycle(const String &reason)
+void commonSetEventIfChanged(const String &eventText)
 {
-    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "FSINV", "common_abort_fsinv")) {
-        Serial.println("COMMON warning: CONV FSINV send error");
+    if (g_commonCycle.lastEvent == eventText) {
+        return;
     }
+
+    g_commonCycle.lastEvent = eventText;
+    g_lastCommandResult = eventText;
+    Serial.println(g_lastCommandResult);
+    (void)mqttPublishStatus(false);
+}
+
+bool commonPauseRuntimeNodeReadyForFinalize()
+{
+    return g_pauseRuntime.nodeReadyConfirmed;
+}
+
+void commonPauseRuntimeMarkFinalizeStarted()
+{
+    if (g_pauseRuntime.finalizeStarted) {
+        return;
+    }
+
+    g_pauseRuntime.finalizeStarted = true;
+    commonSetEventIfChanged("COMMON: pause finalize started after node ready");
+}
+
+bool commonPauseStableContractReached()
+{
+    if (!g_commonCycle.pauseRequested ||
+        g_commonCycle.pauseState != CommonPauseState::StableWait) {
+        return false;
+    }
+
+    const bool terminalPauseOutcomeReached =
+        g_pauseRuntime.state == CommonPauseRuntimeState::PauseHold ||
+        g_pauseRuntime.state == CommonPauseRuntimeState::PauseEmpty ||
+        g_pauseRuntime.state == CommonPauseRuntimeState::ManualRecoveryRequired;
+    if (terminalPauseOutcomeReached) {
+        return true;
+    }
+
+    if (g_commonCycle.pauseForceDrainApplied) {
+        commonSetEventIfChanged("COMMON: pause finalized after force drain, strict snapshot gate released");
+    }
+    return true;
+}
+
+void commonClearRefillPending()
+{
+    g_commonCycle.refillStartPending = false;
+    g_commonCycle.refillStartRequestedMs = 0;
+}
+
+bool commonRefillPendingFresh(uint32_t nowMs)
+{
+    if (!g_commonCycle.refillStartPending) {
+        return false;
+    }
+    return static_cast<uint32_t>(nowMs - g_commonCycle.refillStartRequestedMs) < COMMON_REFILL_RETRY_GUARD_MS;
+}
+
+void commonPauseRuntimeApplyState(CommonPauseRuntimeState state)
+{
+    g_pauseRuntime.state = state;
+    g_pauseRuntime.conveyorSnapshot.pauseState = state;
+    g_pauseRuntime.manipulatorSnapshot.pauseState = state;
+}
+
+bool commonPauseRuntimeMandatoryUnloadInFlight(const Rs485DeviceState &conveyor,
+                                               const Rs485DeviceState &manipulator)
+{
+    if (!g_pauseRuntime.mandatoryUnloadActive) {
+        return false;
+    }
+    return deviceStatusBusy(manipulator) ||
+        conveyorStep2Active(conveyor) ||
+        conveyorVfdTimedRunActive(conveyor);
+}
+
+bool commonPauseRuntimeMandatoryUnloadPolicyActive()
+{
+    // Mandatory unload keeps pause runtime under extended watchdog contract
+    // until settlement is explicitly completed.
+    return g_pauseRuntime.mandatoryUnloadActive;
+}
+
+bool commonPauseRuntimeForceDrainStableWaitPolicyActive()
+{
+    return g_commonCycle.pauseRequested &&
+        g_commonCycle.pauseState == CommonPauseState::StableWait &&
+        g_commonCycle.pauseForceDrainApplied &&
+        !g_pauseRuntime.mandatoryUnloadActive;
+}
+
+bool commonPauseRuntimeWatchdogActive()
+{
+    return g_commonCycle.pauseRequested &&
+        g_pauseRuntime.state != CommonPauseRuntimeState::PauseHold &&
+        g_pauseRuntime.state != CommonPauseRuntimeState::PauseEmpty &&
+        g_pauseRuntime.state != CommonPauseRuntimeState::ManualRecoveryRequired;
+}
+
+uint32_t commonPauseRuntimeMandatoryUnloadElapsedMs(uint32_t nowMs)
+{
+    if (!g_pauseRuntime.mandatoryUnloadActive || g_pauseRuntime.mandatoryUnloadSinceMs == 0) {
+        return 0;
+    }
+    return static_cast<uint32_t>(nowMs - g_pauseRuntime.mandatoryUnloadSinceMs);
+}
+
+const char *commonPauseRuntimeWatchdogProfileName(bool mandatoryUnloadPolicyActive)
+{
+    if (mandatoryUnloadPolicyActive) {
+        return "mandatory_unload";
+    }
+    if (commonPauseRuntimeForceDrainStableWaitPolicyActive()) {
+        return "post_force_drain_stable_wait";
+    }
+    return "normal_pause";
+}
+
+const char *commonPauseRuntimeWatchdogPolicyReason(bool mandatoryUnloadPolicyActive,
+                                                   bool mandatoryUnloadInFlight)
+{
+    if (mandatoryUnloadPolicyActive && mandatoryUnloadInFlight) {
+        return "mandatory_unload_in_flight";
+    }
+    if (mandatoryUnloadPolicyActive) {
+        return "mandatory_unload_settle_wait";
+    }
+    if (commonPauseRuntimeForceDrainStableWaitPolicyActive()) {
+        return "force_drain_finalized_waits_terminal_outcome";
+    }
+    return "normal_pause_contract";
+}
+
+void commonPauseRuntimeRestartArmingWindow(uint32_t nowMs, const char *reason)
+{
+    const uint32_t previousElapsedMs = commonPauseRuntimeArmingElapsedMs(nowMs);
+    const uint32_t previousNoProgressMs = commonPauseRuntimeNoProgressMs(nowMs);
+    g_pauseRuntime.armingSinceMs = nowMs;
+    g_pauseRuntime.lastProgressMs = nowMs;
+    g_pauseRuntime.lastWatchdogWaitLogMs = 0;
+    g_pauseRuntime.watchdogPolicyKnown = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryUnload = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryInFlight = false;
+    g_pauseRuntime.lastWatchdogPolicyForceDrainStableWait = false;
+
+    Serial.print("COMMON: pause arming window restarted; reason=");
+    Serial.print(reason);
+    Serial.print(", previous_elapsed_ms=");
+    Serial.print(previousElapsedMs);
+    Serial.print(", previous_no_progress_ms=");
+    Serial.print(previousNoProgressMs);
+    Serial.print(", pause_state=");
+    Serial.println(commonPauseStateName(g_commonCycle.pauseState));
+}
+
+const char *commonPauseRuntimeSubstateName(const Rs485DeviceState &conveyor,
+                                           const Rs485DeviceState &manipulator)
+{
+    if (!g_commonCycle.pauseRequested) {
+        return "none";
+    }
+    if (!g_pauseRuntime.nodeReadyConfirmed) {
+        if (g_pauseRuntime.conveyorSnapshot.nodeStateFresh) {
+            return "wait_node_ready";
+        }
+        return "pause_request";
+    }
+    if (g_pauseRuntime.mandatoryUnloadActive) {
+        return "mandatory_unload";
+    }
+    if (g_commonCycle.pauseState == CommonPauseState::WaitStrictFeedSnapshot) {
+        return "pause_wait_strict_snapshot";
+    }
+    if (g_commonCycle.pauseState == CommonPauseState::StableWait) {
+        return "pause_stable_wait";
+    }
+    if (g_commonCycle.pauseState == CommonPauseState::FillLastBlock) {
+        if (commonPauseFillLastBlockCompleted(conveyor, manipulator)) {
+            return "pause_fill_last_block_completed";
+        }
+        if (g_pauseRuntime.fillLastBlockBlockedSinceMs != 0) {
+            return "pause_fill_last_block_terminal_decision";
+        }
+        return "pause_fill_last_block";
+    }
+    return "pause_finalize";
+}
+
+void commonPauseRuntimeClearMandatoryUnloadTracking()
+{
+    g_pauseRuntime.mandatoryUnloadActive = false;
+    g_pauseRuntime.mandatoryUnloadSinceMs = 0;
+    g_pauseRuntime.mandatoryUnloadLastProgressMs = 0;
+    g_pauseRuntime.lastConveyorBusy = false;
+    g_pauseRuntime.lastManipulatorBusy = false;
+    g_pauseRuntime.lastManipulatorWorkStep = 0;
+    g_pauseRuntime.lastOutfeedReady = false;
+    g_pauseRuntime.lastOutfeedStep2Active = false;
+    g_pauseRuntime.lastOutfeedVfdActive = false;
+    g_pauseRuntime.lastOutfeedStep2Seq = 0;
+    g_pauseRuntime.lastOutfeedSealerSeq = 0;
+    g_pauseRuntime.watchdogPolicyKnown = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryUnload = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryInFlight = false;
+    g_pauseRuntime.lastWatchdogPolicyForceDrainStableWait = false;
+}
+
+void commonPauseRuntimeMarkMandatoryUnloadStarted(uint32_t nowMs)
+{
+    g_pauseRuntime.mandatoryUnloadActive = true;
+    g_pauseRuntime.mandatoryUnloadSinceMs = nowMs;
+    g_pauseRuntime.mandatoryUnloadLastProgressMs = nowMs;
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    g_pauseRuntime.lastConveyorBusy = deviceStatusBusy(conveyor);
+    g_pauseRuntime.lastManipulatorBusy = deviceStatusBusy(manipulator);
+    g_pauseRuntime.lastManipulatorWorkStep = manipulatorWorkStep(manipulator);
+    g_pauseRuntime.lastOutfeedReady = conveyorOutfeedReadyForBatch(conveyor);
+    g_pauseRuntime.lastOutfeedStep2Active = conveyorStep2Active(conveyor);
+    g_pauseRuntime.lastOutfeedVfdActive = conveyorVfdTimedRunActive(conveyor);
+    g_pauseRuntime.lastOutfeedStep2Seq = conveyorStep2CompletionSeq(conveyor);
+    g_pauseRuntime.lastOutfeedSealerSeq = conveyorSealerCompletionSeq(conveyor);
+}
+
+bool commonPauseRuntimeCanRelease()
+{
+    return g_pauseRuntime.state == CommonPauseRuntimeState::PauseHold ||
+        g_pauseRuntime.state == CommonPauseRuntimeState::PauseEmpty;
+}
+
+uint32_t commonPauseRuntimeNextEpoch()
+{
+    uint32_t next = g_pauseRuntime.currentEpoch + 1U;
+    if (next == 0U) {
+        next = 1U;
+    }
+    g_pauseRuntime.currentEpoch = next;
+    return next;
+}
+
+void commonPauseRuntimeDeactivate()
+{
+    commonPauseRuntimeApplyState(CommonPauseRuntimeState::None);
+    g_pauseRuntime.pauseCycleId = 0;
+    g_pauseRuntime.armingSinceMs = 0;
+    g_pauseRuntime.lastProgressMs = 0;
+    g_pauseRuntime.lastStatusPollMs = 0;
+    g_pauseRuntime.progressObserved = false;
+    g_pauseRuntime.lastLegacyPauseState = CommonPauseState::None;
+    g_pauseRuntime.lastConveyorNodeState = CommonPauseNodeState::None;
+    g_pauseRuntime.lastBufferCount = 0;
+    g_pauseRuntime.lastBufferCountValid = false;
+    g_pauseRuntime.lastSealerCount = 0;
+    g_pauseRuntime.lastSealerCountValid = false;
+    g_pauseRuntime.lastBufferCountSource = PauseCountSource::None;
+    g_pauseRuntime.lastSealerCountSource = PauseCountSource::None;
+    g_pauseRuntime.armSentConveyor = false;
+    g_pauseRuntime.armSentManipulator = false;
+    g_pauseRuntime.releaseSentConveyor = false;
+    g_pauseRuntime.releaseSentManipulator = false;
+    g_pauseRuntime.lastNodePauseEpochConfirmed = false;
+    g_pauseRuntime.nodeReadyConfirmed = false;
+    g_pauseRuntime.finalizeStarted = false;
+    commonPauseRuntimeClearMandatoryUnloadTracking();
+    g_pauseRuntime.lastWatchdogWaitLogMs = 0;
+    g_pauseRuntime.lastConveyorBusy = false;
+    g_pauseRuntime.lastManipulatorBusy = false;
+    g_pauseRuntime.lastManipulatorWorkStep = 0;
+    g_pauseRuntime.lastOutfeedReady = false;
+    g_pauseRuntime.lastOutfeedStep2Active = false;
+    g_pauseRuntime.lastOutfeedVfdActive = false;
+    g_pauseRuntime.lastOutfeedStep2Seq = 0;
+    g_pauseRuntime.lastOutfeedSealerSeq = 0;
+    g_pauseRuntime.lastFillLastBlockCompleted = false;
+    g_pauseRuntime.fillLastBlockCompletionLatched = false;
+    g_pauseRuntime.fillLastBlockBlockedSinceMs = 0;
+    g_pauseRuntime.fillLastBlockBlockedLogged = false;
+    g_pauseRuntime.watchdogPolicyKnown = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryUnload = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryInFlight = false;
+    g_pauseRuntime.lastWatchdogPolicyForceDrainStableWait = false;
+    g_pauseRuntime.conveyorSnapshot = CommonPauseSnapshot{};
+    g_pauseRuntime.manipulatorSnapshot = CommonPauseSnapshot{};
+}
+
+void commonPauseRuntimeBeginEpoch(uint32_t nowMs)
+{
+    const uint32_t epoch = commonPauseRuntimeNextEpoch();
+    g_pauseRuntime.pauseCycleId = g_commonCycle.cycleId;
+    g_pauseRuntime.armingSinceMs = nowMs;
+    g_pauseRuntime.lastProgressMs = nowMs;
+    g_pauseRuntime.lastStatusPollMs = 0;
+    g_pauseRuntime.progressObserved = false;
+    g_pauseRuntime.lastLegacyPauseState = g_commonCycle.pauseState;
+    g_pauseRuntime.lastConveyorNodeState = CommonPauseNodeState::None;
+    g_pauseRuntime.lastBufferCount = 0;
+    g_pauseRuntime.lastBufferCountValid = false;
+    g_pauseRuntime.lastSealerCount = 0;
+    g_pauseRuntime.lastSealerCountValid = false;
+    g_pauseRuntime.armSentConveyor = false;
+    g_pauseRuntime.armSentManipulator = false;
+    g_pauseRuntime.releaseSentConveyor = false;
+    g_pauseRuntime.releaseSentManipulator = false;
+    g_pauseRuntime.lastNodePauseEpochConfirmed = false;
+    g_pauseRuntime.nodeReadyConfirmed = false;
+    g_pauseRuntime.finalizeStarted = false;
+    g_pauseRuntime.watchdogPolicyKnown = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryUnload = false;
+    g_pauseRuntime.lastWatchdogPolicyMandatoryInFlight = false;
+    g_pauseRuntime.lastWatchdogPolicyForceDrainStableWait = false;
+    commonPauseRuntimeClearMandatoryUnloadTracking();
+    g_pauseRuntime.lastWatchdogWaitLogMs = 0;
+    g_pauseRuntime.lastConveyorBusy = false;
+    g_pauseRuntime.lastManipulatorBusy = false;
+    g_pauseRuntime.lastManipulatorWorkStep = 0;
+    g_pauseRuntime.lastOutfeedReady = false;
+    g_pauseRuntime.lastOutfeedStep2Active = false;
+    g_pauseRuntime.lastOutfeedVfdActive = false;
+    g_pauseRuntime.lastOutfeedStep2Seq = 0;
+    g_pauseRuntime.lastOutfeedSealerSeq = 0;
+    g_pauseRuntime.lastFillLastBlockCompleted = false;
+    g_pauseRuntime.fillLastBlockCompletionLatched = false;
+    g_pauseRuntime.fillLastBlockBlockedSinceMs = 0;
+    g_pauseRuntime.fillLastBlockBlockedLogged = false;
+    g_pauseRuntime.conveyorSnapshot = CommonPauseSnapshot{};
+    g_pauseRuntime.manipulatorSnapshot = CommonPauseSnapshot{};
+    g_pauseRuntime.conveyorSnapshot.pauseEpoch = epoch;
+    g_pauseRuntime.conveyorSnapshot.pauseCycleId = g_pauseRuntime.pauseCycleId;
+    g_pauseRuntime.manipulatorSnapshot.pauseEpoch = epoch;
+    g_pauseRuntime.manipulatorSnapshot.pauseCycleId = g_pauseRuntime.pauseCycleId;
+    commonPauseRuntimeApplyState(CommonPauseRuntimeState::PauseArming);
+}
+
+bool commonPauseFillLastBlockCompleted(const Rs485DeviceState &conveyor,
+                                       const Rs485DeviceState &manipulator)
+{
+    const CommonPauseSnapshot &snap = g_pauseRuntime.conveyorSnapshot;
+    const bool nodeReadySnapshot =
+        g_pauseRuntime.nodeReadyConfirmed &&
+        snap.nodePauseEpochConfirmed &&
+        snap.nodeStateFresh &&
+        snap.nodeState == CommonPauseNodeState::Ready;
+    const bool trustedBufferEmpty =
+        snap.nodePauseEpochConfirmed &&
+        snap.bufferCountValid &&
+        snap.bufferCountFresh &&
+        snap.bufferCountSource == PauseCountSource::TrustedWire &&
+        snap.bufferCount == 0;
+    const bool manipIdle = !deviceStatusBusy(manipulator);
+    const bool conveyorTailIdle =
+        !deviceStatusBusy(conveyor) &&
+        !conveyorStep2Active(conveyor) &&
+        !conveyorVfdTimedRunActive(conveyor);
+    const bool outfeedReady = conveyorOutfeedReadyForBatch(conveyor);
+    return nodeReadySnapshot &&
+        trustedBufferEmpty &&
+        manipIdle &&
+        conveyorTailIdle &&
+        outfeedReady;
+}
+
+bool commonPauseContractDrainIdle(const Rs485DeviceState &conveyor,
+                                  const Rs485DeviceState &manipulator,
+                                  uint32_t nowMs)
+{
+    (void)nowMs;
+    if (g_commonCycle.pauseState == CommonPauseState::StableWait) {
+        return true;
+    }
+    const bool legacyDrainIdle =
+        !conveyorProgram1Active(conveyor) &&
+        !deviceStatusBusy(manipulator) &&
+        conveyorFeedSideEmptyValid(conveyor) &&
+        conveyorFeedSideEmptyStrict(conveyor);
+    if (legacyDrainIdle) {
+        return true;
+    }
+    return commonPauseFillLastBlockCompleted(conveyor, manipulator);
+}
+
+bool commonPauseFinalizeFeedSideKnownEmpty(bool feedSideKnown, bool feedSideEmpty)
+{
+    if (feedSideKnown && feedSideEmpty) {
+        return true;
+    }
+
+    const CommonPauseSnapshot &snap = g_pauseRuntime.conveyorSnapshot;
+    return g_pauseRuntime.nodeReadyConfirmed &&
+        snap.nodePauseEpochConfirmed &&
+        snap.nodeStateFresh &&
+        snap.nodeState == CommonPauseNodeState::Ready &&
+        snap.bufferCountValid &&
+        snap.bufferCountFresh &&
+        snap.bufferCountSource == PauseCountSource::TrustedWire &&
+        snap.bufferCount == 0;
+}
+
+void commonPauseRuntimeUpdateSnapshots(const Rs485DeviceState &conveyor, uint32_t nowMs)
+{
+    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    CommonPauseSnapshot conveyorSnap = {};
+    conveyorSnap.pauseEpoch = g_pauseRuntime.currentEpoch;
+    conveyorSnap.pauseCycleId = g_pauseRuntime.pauseCycleId;
+    conveyorSnap.pauseState = g_pauseRuntime.state;
+    conveyorSnap.nodeState = CommonPauseNodeState::None;
+    conveyorSnap.nodeStateFresh = false;
+    conveyorSnap.manualRecoveryRequired = commonManualRecoveryRequired();
+    conveyorSnap.progressObserved = g_pauseRuntime.progressObserved;
+    conveyorSnap.updatedMs = nowMs;
+
+    const bool conveyorOnline = conveyor.online && conveyor.protocolOk;
+    const bool manipulatorOnline = manipulator.online && manipulator.protocolOk;
+    const bool convStale =
+        !conveyorOnline ||
+        (nowMs - conveyor.lastSeenMs) > COMMON_PAUSE_NODE_FRAME_STALE_MS;
+    const bool manipStale =
+        !manipulatorOnline ||
+        (nowMs - manipulator.lastSeenMs) > COMMON_PAUSE_NODE_FRAME_STALE_MS;
+
+    const uint32_t convHb = conveyor.managedHeartbeatMs;
+    const bool extValid = conveyorOnline && conveyorPauseHeartbeatExtValid(convHb);
+    const uint16_t epoch12 = static_cast<uint16_t>(g_pauseRuntime.currentEpoch & 0x0FFFU);
+    const uint16_t epoch10 = static_cast<uint16_t>(g_pauseRuntime.currentEpoch & 0x03FFU);
+
+    const bool convAck =
+        conveyorOnline &&
+        conveyorPauseStatusAckValid(conveyor) &&
+        conveyorPauseStatusAckEpoch(conveyor) == epoch12;
+    const bool manipAck =
+        manipulatorOnline &&
+        manipulatorPauseStatusAckValid(manipulator) &&
+        manipulatorPauseStatusAckEpoch(manipulator) == epoch10;
+
+    const bool nodeEpochConfirmed =
+        convAck && manipAck && !convStale && !manipStale && extValid;
+
+    int16_t wireBuf = 0;
+    bool wireBufValid = false;
+    int16_t wireSeal = 0;
+    bool wireSealValid = false;
+    bool wireResidualKnown = false;
+    if (extValid) {
+        conveyorUnpackPauseHeartbeat(
+            convHb,
+            wireBuf,
+            wireBufValid,
+            wireSeal,
+            wireSealValid,
+            wireResidualKnown);
+    }
+    const bool conveyorNodeStateVisible =
+        convAck && extValid && !convStale;
+    if (conveyorNodeStateVisible) {
+        conveyorSnap.nodeState = conveyorPauseHeartbeatNodeState(convHb);
+        conveyorSnap.nodeStateFresh = true;
+    }
+
+    conveyorSnap.nodePauseEpochConfirmed = nodeEpochConfirmed;
+
+    if (nodeEpochConfirmed && extValid) {
+        conveyorSnap.bufferCount = wireBuf;
+        conveyorSnap.bufferCountValid = wireBufValid;
+        conveyorSnap.bufferCountFresh = wireBufValid && !convStale;
+        conveyorSnap.bufferCountSource = wireBufValid
+            ? PauseCountSource::TrustedWire
+            : PauseCountSource::TrustedWireUnknown;
+        conveyorSnap.sealerCount = wireSeal;
+        conveyorSnap.sealerCountValid = wireSealValid;
+        conveyorSnap.sealerCountFresh = wireSealValid && !convStale;
+        conveyorSnap.sealerCountSource = wireSealValid
+            ? PauseCountSource::TrustedWire
+            : PauseCountSource::TrustedWireUnknown;
+        if (conveyorSnap.sealerCount > 0) {
+            conveyorSnap.sealerResidualKnown = wireResidualKnown;
+        } else {
+            conveyorSnap.sealerResidualKnown = wireSealValid;
+        }
+        conveyorSnap.contractSnapshotTrusted =
+            conveyorSnap.bufferCountValid &&
+            conveyorSnap.bufferCountFresh &&
+            conveyorSnap.sealerCountValid &&
+            conveyorSnap.sealerCountFresh &&
+            (conveyorSnap.sealerCount == 0 ||
+             (conveyorSnap.sealerCount > 0 && conveyorSnap.sealerResidualKnown));
+    } else {
+        conveyorSnap.bufferCountSource = PauseCountSource::SurrogateFeedFlags;
+        conveyorSnap.bufferCountValid = conveyorOnline && conveyorFeedSideEmptyValid(conveyor);
+        if (conveyorSnap.bufferCountValid) {
+            conveyorSnap.bufferCount = conveyorFeedSideEmptyStrict(conveyor) ? 0 : 1;
+        } else {
+            conveyorSnap.bufferCount = -1;
+        }
+        conveyorSnap.bufferCountFresh = false;
+
+        conveyorSnap.sealerCountSource = PauseCountSource::SurrogateSealerSignals;
+        const bool sealerResidualSeen =
+            conveyorOnline &&
+            (conveyorSealerBusy(conveyor) ||
+             conveyorSealerDoneActive(conveyor) ||
+             g_commonCycle.sealerDonePendingUnload);
+        conveyorSnap.sealerCountValid = sealerResidualSeen;
+        if (conveyorSnap.sealerCountValid) {
+            conveyorSnap.sealerCount = COMMON_PAUSE_SEALER_RESIDUAL_COUNT;
+        } else {
+            conveyorSnap.sealerCount = -1;
+        }
+        conveyorSnap.sealerCountFresh = false;
+        conveyorSnap.sealerResidualKnown = false;
+        conveyorSnap.contractSnapshotTrusted = false;
+    }
+
+    g_pauseRuntime.conveyorSnapshot = conveyorSnap;
+
+    CommonPauseSnapshot manipulatorSnap = conveyorSnap;
+    manipulatorSnap.bufferCount = 0;
+    manipulatorSnap.bufferCountValid = false;
+    manipulatorSnap.sealerCount = 0;
+    manipulatorSnap.sealerCountValid = false;
+    manipulatorSnap.sealerResidualKnown = false;
+    manipulatorSnap.bufferCountFresh = false;
+    manipulatorSnap.sealerCountFresh = false;
+    manipulatorSnap.bufferCountSource = PauseCountSource::None;
+    manipulatorSnap.sealerCountSource = PauseCountSource::None;
+    manipulatorSnap.nodePauseEpochConfirmed = nodeEpochConfirmed;
+    manipulatorSnap.contractSnapshotTrusted = conveyorSnap.contractSnapshotTrusted;
+    manipulatorSnap.nodeState = CommonPauseNodeState::None;
+    manipulatorSnap.nodeStateFresh = false;
+    g_pauseRuntime.manipulatorSnapshot = manipulatorSnap;
+}
+
+bool commonPauseRuntimeRecordProgress(uint32_t nowMs,
+                                      const Rs485DeviceState &conveyor,
+                                      const Rs485DeviceState &manipulator)
+{
+    const CommonPauseSnapshot &snap = g_pauseRuntime.conveyorSnapshot;
+    bool progress = false;
+    String progressDiag;
+    auto markProgress = [&](const String &marker) {
+        progress = true;
+        if (!progressDiag.isEmpty()) {
+            progressDiag += ", ";
+        }
+        progressDiag += marker;
+    };
+
+    if (snap.nodePauseEpochConfirmed && !g_pauseRuntime.lastNodePauseEpochConfirmed) {
+        markProgress("node_epoch_confirmed");
+    }
+    g_pauseRuntime.lastNodePauseEpochConfirmed = snap.nodePauseEpochConfirmed;
+    if (snap.nodeStateFresh && snap.nodeState != g_pauseRuntime.lastConveyorNodeState) {
+        Serial.print("COMMON: pause node state: ");
+        Serial.println(commonPauseNodeStateName(snap.nodeState));
+        markProgress("node_state=" + String(commonPauseNodeStateName(snap.nodeState)));
+    }
+    if (g_commonCycle.pauseState != g_pauseRuntime.lastLegacyPauseState) {
+        markProgress("pause_state=" + String(commonPauseStateName(g_commonCycle.pauseState)));
+    }
+    if (snap.bufferCountValid && !g_pauseRuntime.lastBufferCountValid) {
+        markProgress("buffer_count_valid");
+    }
+    if (snap.sealerCountValid && !g_pauseRuntime.lastSealerCountValid) {
+        markProgress("sealer_count_valid");
+    }
+    if (snap.bufferCountSource != g_pauseRuntime.lastBufferCountSource) {
+        markProgress("buffer_source=" + String(pauseCountSourceName(snap.bufferCountSource)));
+    }
+    if (snap.sealerCountSource != g_pauseRuntime.lastSealerCountSource) {
+        markProgress("sealer_source=" + String(pauseCountSourceName(snap.sealerCountSource)));
+    }
+    if (snap.bufferCountValid &&
+        g_pauseRuntime.lastBufferCountValid &&
+        snap.bufferCount < g_pauseRuntime.lastBufferCount) {
+        markProgress("buffer_count_drop=" + String(snap.bufferCount));
+    }
+    if (snap.sealerCountValid &&
+        g_pauseRuntime.lastSealerCountValid &&
+        snap.sealerCount < g_pauseRuntime.lastSealerCount) {
+        markProgress("sealer_count_drop=" + String(snap.sealerCount));
+    }
+    if (!progress &&
+        snap.nodeStateFresh &&
+        snap.nodeState == CommonPauseNodeState::Preparing &&
+        g_pauseRuntime.lastProgressMs != 0 &&
+        static_cast<uint32_t>(nowMs - g_pauseRuntime.lastProgressMs) >=
+            COMMON_PAUSE_NODE_PREPARING_HEARTBEAT_MS) {
+        markProgress("node_preparing_heartbeat");
+    }
+
+    const bool conveyorBusy = deviceStatusBusy(conveyor);
+    const bool manipBusy = deviceStatusBusy(manipulator);
+    const uint8_t manipStep = manipulatorWorkStep(manipulator);
+    const bool outfeedReady = conveyorOutfeedReadyForBatch(conveyor);
+    const bool outfeedStep2Active = conveyorStep2Active(conveyor);
+    const bool outfeedVfdActive = conveyorVfdTimedRunActive(conveyor);
+    const uint8_t outfeedStep2Seq = conveyorStep2CompletionSeq(conveyor);
+    const uint8_t outfeedSealerSeq = conveyorSealerCompletionSeq(conveyor);
+    const bool fillLastBlockCompleted =
+        commonPauseFillLastBlockCompleted(conveyor, manipulator);
+
+    if (g_pauseRuntime.finalizeStarted && !g_pauseRuntime.mandatoryUnloadActive) {
+        const bool activityInFlight =
+            conveyorBusy || manipBusy || outfeedStep2Active || outfeedVfdActive;
+
+        if (conveyorBusy != g_pauseRuntime.lastConveyorBusy) {
+            markProgress("pause_finalize.conv_busy=" + String(conveyorBusy ? "yes" : "no"));
+        }
+        if (manipBusy != g_pauseRuntime.lastManipulatorBusy) {
+            markProgress("pause_finalize.manip_busy=" + String(manipBusy ? "yes" : "no"));
+        }
+        if (manipStep != g_pauseRuntime.lastManipulatorWorkStep) {
+            markProgress("pause_finalize.manip_step=" + String(manipStep));
+        }
+        if (outfeedReady != g_pauseRuntime.lastOutfeedReady) {
+            markProgress("pause_finalize.outfeed_ready=" + String(outfeedReady ? "yes" : "no"));
+        }
+        if (outfeedStep2Active && !g_pauseRuntime.lastOutfeedStep2Active) {
+            markProgress("pause_finalize.step2_active_rise");
+        }
+        if (outfeedVfdActive && !g_pauseRuntime.lastOutfeedVfdActive) {
+            markProgress("pause_finalize.vfd_active_rise");
+        }
+        if (outfeedStep2Seq != g_pauseRuntime.lastOutfeedStep2Seq) {
+            markProgress("pause_finalize.step2_seq=" + String(outfeedStep2Seq));
+        }
+        if (outfeedSealerSeq != g_pauseRuntime.lastOutfeedSealerSeq) {
+            markProgress("pause_finalize.sealer_seq=" + String(outfeedSealerSeq));
+        }
+        if (fillLastBlockCompleted != g_pauseRuntime.lastFillLastBlockCompleted) {
+            markProgress("pause_finalize.fill_last_block_completed=" +
+                         String(fillLastBlockCompleted ? "yes" : "no"));
+        }
+        if (!progress &&
+            activityInFlight &&
+            g_pauseRuntime.lastProgressMs != 0 &&
+            static_cast<uint32_t>(nowMs - g_pauseRuntime.lastProgressMs) >=
+                COMMON_PAUSE_FINALIZE_ACTIVITY_HEARTBEAT_MS) {
+            markProgress("pause_finalize.activity_heartbeat");
+        }
+    }
+
+    if (g_pauseRuntime.mandatoryUnloadActive) {
+        const bool outfeedReady = conveyorOutfeedReadyForBatch(conveyor);
+        const bool outfeedStep2Active = conveyorStep2Active(conveyor);
+        const bool outfeedVfdActive = conveyorVfdTimedRunActive(conveyor);
+        const uint8_t outfeedStep2Seq = conveyorStep2CompletionSeq(conveyor);
+        const uint8_t outfeedSealerSeq = conveyorSealerCompletionSeq(conveyor);
+        const bool mandatoryUnloadInFlightNow =
+            manipBusy || outfeedStep2Active || outfeedVfdActive;
+        const bool mandatoryUnloadInFlightPrev =
+            g_pauseRuntime.lastManipulatorBusy ||
+            g_pauseRuntime.lastOutfeedStep2Active ||
+            g_pauseRuntime.lastOutfeedVfdActive;
+
+        if (mandatoryUnloadInFlightPrev && !mandatoryUnloadInFlightNow) {
+            Serial.print("COMMON: pause mandatory unload enters settle wait; ");
+            Serial.print("reason=all_in_flight_signals_cleared");
+            Serial.print(", manip_busy=");
+            Serial.print(manipBusy ? "yes" : "no");
+            Serial.print(", outfeed_step2_active=");
+            Serial.print(outfeedStep2Active ? "yes" : "no");
+            Serial.print(", outfeed_vfd_active=");
+            Serial.print(outfeedVfdActive ? "yes" : "no");
+            Serial.print(", outfeed_ready=");
+            Serial.print(outfeedReady ? "yes" : "no");
+            Serial.print(", arming_elapsed_ms=");
+            Serial.print(commonPauseRuntimeArmingElapsedMs(nowMs));
+            Serial.print(", mandatory_unload_elapsed_ms=");
+            Serial.println(commonPauseRuntimeMandatoryUnloadElapsedMs(nowMs));
+        }
+
+        if (manipBusy != g_pauseRuntime.lastManipulatorBusy) {
+            markProgress("mandatory_unload.manip_busy=" + String(manipBusy ? "yes" : "no"));
+        }
+        if (manipStep != g_pauseRuntime.lastManipulatorWorkStep) {
+            markProgress("mandatory_unload.manip_step=" + String(manipStep));
+        }
+        if (outfeedReady != g_pauseRuntime.lastOutfeedReady) {
+            markProgress("mandatory_unload.outfeed_ready=" + String(outfeedReady ? "yes" : "no"));
+        }
+        if (outfeedStep2Active && !g_pauseRuntime.lastOutfeedStep2Active) {
+            markProgress("mandatory_unload.step2_active_rise");
+        }
+        if (outfeedVfdActive && !g_pauseRuntime.lastOutfeedVfdActive) {
+            markProgress("mandatory_unload.vfd_active_rise");
+        }
+        if (outfeedStep2Seq != g_pauseRuntime.lastOutfeedStep2Seq) {
+            markProgress("mandatory_unload.step2_seq=" + String(outfeedStep2Seq));
+        }
+        if (outfeedSealerSeq != g_pauseRuntime.lastOutfeedSealerSeq) {
+            markProgress("mandatory_unload.sealer_seq=" + String(outfeedSealerSeq));
+        }
+        if (!progress &&
+            manipBusy &&
+            g_pauseRuntime.lastProgressMs != 0 &&
+            static_cast<uint32_t>(nowMs - g_pauseRuntime.lastProgressMs) >=
+                COMMON_PAUSE_MANDATORY_UNLOAD_BUSY_HEARTBEAT_MS) {
+            markProgress("mandatory_unload.busy_heartbeat");
+        }
+    }
+
+    g_pauseRuntime.lastConveyorBusy = conveyorBusy;
+    g_pauseRuntime.lastManipulatorBusy = manipBusy;
+    g_pauseRuntime.lastManipulatorWorkStep = manipStep;
+    g_pauseRuntime.lastOutfeedReady = outfeedReady;
+    g_pauseRuntime.lastOutfeedStep2Active = outfeedStep2Active;
+    g_pauseRuntime.lastOutfeedVfdActive = outfeedVfdActive;
+    g_pauseRuntime.lastOutfeedStep2Seq = outfeedStep2Seq;
+    g_pauseRuntime.lastOutfeedSealerSeq = outfeedSealerSeq;
+    g_pauseRuntime.lastFillLastBlockCompleted = fillLastBlockCompleted;
+
+    g_pauseRuntime.lastLegacyPauseState = g_commonCycle.pauseState;
+    if (snap.nodeStateFresh) {
+        g_pauseRuntime.lastConveyorNodeState = snap.nodeState;
+    }
+    if (snap.bufferCountValid) {
+        g_pauseRuntime.lastBufferCount = snap.bufferCount;
+        g_pauseRuntime.lastBufferCountValid = true;
+    } else {
+        g_pauseRuntime.lastBufferCountValid = false;
+    }
+    if (snap.sealerCountValid) {
+        g_pauseRuntime.lastSealerCount = snap.sealerCount;
+        g_pauseRuntime.lastSealerCountValid = true;
+    } else {
+        g_pauseRuntime.lastSealerCountValid = false;
+    }
+    g_pauseRuntime.lastBufferCountSource = snap.bufferCountSource;
+    g_pauseRuntime.lastSealerCountSource = snap.sealerCountSource;
+
+    if (progress) {
+        g_pauseRuntime.lastProgressMs = nowMs;
+        if (g_pauseRuntime.mandatoryUnloadActive) {
+            g_pauseRuntime.mandatoryUnloadLastProgressMs = nowMs;
+        }
+        g_pauseRuntime.progressObserved = true;
+        Serial.print("COMMON: pause progress ");
+        Serial.print(progressDiag);
+        Serial.print(", substate=");
+        Serial.println(commonPauseRuntimeSubstateName(conveyor, manipulator));
+    }
+
+    g_pauseRuntime.conveyorSnapshot.progressObserved = g_pauseRuntime.progressObserved;
+    g_pauseRuntime.manipulatorSnapshot.progressObserved = g_pauseRuntime.progressObserved;
+    return progress;
+}
+
+uint32_t commonPauseRuntimeArmingElapsedMs(uint32_t nowMs)
+{
+    if (g_pauseRuntime.armingSinceMs == 0) {
+        return 0;
+    }
+    return static_cast<uint32_t>(nowMs - g_pauseRuntime.armingSinceMs);
+}
+
+uint32_t commonPauseRuntimeNoProgressMs(uint32_t nowMs)
+{
+    if (g_pauseRuntime.lastProgressMs == 0) {
+        return 0;
+    }
+    return static_cast<uint32_t>(nowMs - g_pauseRuntime.lastProgressMs);
+}
+
+void commonPauseSendNodeCommand(uint8_t id, const String &command, const char *origin)
+{
+    if (!i2cSendManagedDeviceCommand(id, command, origin)) {
+        Serial.print("COMMON warning: failed to send ");
+        Serial.print(command);
+        Serial.print(" to node ");
+        Serial.println(id);
+    }
+}
+
+void commonPauseSendArmCommands()
+{
+    if (g_pauseRuntime.currentEpoch == 0) {
+        return;
+    }
+    const String command = "PAUSE ARM " + String(g_pauseRuntime.currentEpoch);
+    if (!g_pauseRuntime.armSentConveyor) {
+        commonPauseSendNodeCommand(CONVEYOR_ID, command, "common_pause_arm");
+        g_pauseRuntime.armSentConveyor = true;
+    }
+    if (!g_pauseRuntime.armSentManipulator) {
+        commonPauseSendNodeCommand(MANIPULATOR_ID, command, "common_pause_arm");
+        g_pauseRuntime.armSentManipulator = true;
+    }
+}
+
+void commonPausePollStatusCommands(uint32_t nowMs)
+{
+    if (g_pauseRuntime.currentEpoch == 0) {
+        return;
+    }
+    if (g_pauseRuntime.lastStatusPollMs != 0 &&
+        static_cast<uint32_t>(nowMs - g_pauseRuntime.lastStatusPollMs) < COMMON_PAUSE_STATUS_POLL_MS) {
+        return;
+    }
+
+    g_pauseRuntime.lastStatusPollMs = nowMs;
+    const String command = "PAUSE STATUS " + String(g_pauseRuntime.currentEpoch);
+    commonPauseSendNodeCommand(CONVEYOR_ID, command, "common_pause_status");
+    commonPauseSendNodeCommand(MANIPULATOR_ID, command, "common_pause_status");
+}
+
+void commonPauseSendReleaseCommands()
+{
+    if (g_pauseRuntime.currentEpoch == 0) {
+        return;
+    }
+    const String command = "PAUSE RELEASE " + String(g_pauseRuntime.currentEpoch);
+    if (!g_pauseRuntime.releaseSentConveyor) {
+        commonPauseSendNodeCommand(CONVEYOR_ID, command, "common_pause_release");
+        g_pauseRuntime.releaseSentConveyor = true;
+    }
+    if (!g_pauseRuntime.releaseSentManipulator) {
+        commonPauseSendNodeCommand(MANIPULATOR_ID, command, "common_pause_release");
+        g_pauseRuntime.releaseSentManipulator = true;
+    }
+}
+
+void commonPauseEscalateToManualRecovery(const String &reason, const char *trigger)
+{
+    commonResetPauseStrictSnapshotTracking();
+    commonPauseRuntimeClearMandatoryUnloadTracking();
+    commonClearRefillPending();
+    g_commonCycle.active = false;
+    g_commonCycle.pauseRequested = false;
+    g_commonCycle.pauseState = CommonPauseState::None;
+    g_commonCycle.step3Seen = false;
+    g_commonCycle.step3LaunchDone = false;
+    g_commonCycle.parallelLaunchDone = false;
+    g_commonCycle.currentCycleLoadsSealer = false;
+    g_commonCycle.outfeedStartIssued = false;
+    g_commonCycle.outfeedNotReadyObserved = false;
+    g_commonCycle.runtimeState = CommonRuntimeState::ManualRecoveryRequired;
+    g_commonCycle.abortDrainOutcome = CommonAbortDrainOutcome::NoProgress;
+    g_commonCycle.abortRequiresManualRecovery = true;
+    g_commonCycle.abortReason = reason;
+    g_commonCycle.stage = CommonCycleStage::Idle;
+    g_commonCycle.cycleId = 0;
+    commonPauseRuntimeApplyState(CommonPauseRuntimeState::ManualRecoveryRequired);
+    g_pauseRuntime.pauseCycleId = 0;
+    g_pauseRuntime.armingSinceMs = 0;
+    g_pauseRuntime.nodeReadyConfirmed = false;
+    g_pauseRuntime.finalizeStarted = false;
+
+    const bool watchdogTrigger =
+        trigger == nullptr || trigger[0] == '\0' || strcmp(trigger, "watchdog") == 0;
+    if (watchdogTrigger) {
+        g_commonCycle.lastEvent = "COMMON: pause watchdog escalated to manual recovery (" + reason + ")";
+    } else {
+        g_commonCycle.lastEvent = "COMMON: pause manual recovery required (trigger=" +
+            String(trigger) + ", " + reason + ")";
+    }
+    g_lastCommandResult = g_commonCycle.lastEvent;
+    Serial.println(g_lastCommandResult);
+    (void)mqttPublishStatus(false);
+}
+
+void commonPauseRuntimeTick(uint32_t nowMs, const Rs485DeviceState &conveyor)
+{
+    if (commonManualRecoveryRequired()) {
+        commonPauseRuntimeApplyState(CommonPauseRuntimeState::ManualRecoveryRequired);
+        commonPauseRuntimeUpdateSnapshots(conveyor, nowMs);
+        return;
+    }
+
+    if (!g_commonCycle.pauseRequested) {
+        if (g_pauseRuntime.state != CommonPauseRuntimeState::None) {
+            commonPauseRuntimeDeactivate();
+        }
+        return;
+    }
+
+    if (g_pauseRuntime.currentEpoch == 0 || g_pauseRuntime.pauseCycleId == 0) {
+        commonPauseRuntimeBeginEpoch(nowMs);
+    }
+
+    commonPauseRuntimeApplyState(CommonPauseRuntimeState::PauseArming);
+    commonPauseSendArmCommands();
+    commonPausePollStatusCommands(nowMs);
+    commonPauseRuntimeUpdateSnapshots(conveyor, nowMs);
+    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    (void)commonPauseRuntimeRecordProgress(nowMs, conveyor, manipulator);
+    if (g_pauseRuntime.conveyorSnapshot.nodeStateFresh &&
+        g_pauseRuntime.conveyorSnapshot.nodeState == CommonPauseNodeState::BlockedFault) {
+        String faultText = "COMMON: pause blocked by node fault";
+        faultText += " (node_state=blocked";
+        faultText += ", conveyor_alarm=" + String(deviceStatusAlarm(conveyor) ? "yes" : "no");
+        faultText += ", post7_manual_recovery=" +
+            String(conveyorPost7ManualRecoveryRequired(conveyor) ? "yes" : "no");
+        faultText += ")";
+        Serial.println(faultText);
+        commonPauseEscalateToManualRecovery(
+            "pause_node_blocked state=blocked, conveyor_alarm=" +
+            String(deviceStatusAlarm(conveyor) ? "yes" : "no") +
+            ", post7_manual_recovery=" +
+            String(conveyorPost7ManualRecoveryRequired(conveyor) ? "yes" : "no"),
+            "node_fault");
+        return;
+    }
+    if (!g_pauseRuntime.nodeReadyConfirmed &&
+        g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed &&
+        g_pauseRuntime.conveyorSnapshot.nodeState == CommonPauseNodeState::Ready) {
+        g_pauseRuntime.nodeReadyConfirmed = true;
+        commonSetEventIfChanged("COMMON: pause node ready confirmed");
+    }
+    const bool trusted = g_pauseRuntime.conveyorSnapshot.contractSnapshotTrusted;
+    const bool bufOk =
+        trusted &&
+        g_pauseRuntime.conveyorSnapshot.bufferCountValid &&
+        g_pauseRuntime.conveyorSnapshot.bufferCountFresh &&
+        g_pauseRuntime.conveyorSnapshot.bufferCount == 0;
+    const bool sealerOkForHold =
+        g_pauseRuntime.conveyorSnapshot.sealerCountValid &&
+        g_pauseRuntime.conveyorSnapshot.sealerCountFresh &&
+        (g_pauseRuntime.conveyorSnapshot.sealerCount == 0 ||
+         (g_pauseRuntime.conveyorSnapshot.sealerCount > 0 &&
+          g_pauseRuntime.conveyorSnapshot.sealerResidualKnown));
+    const bool fillLastBlockCompleted =
+        commonPauseFillLastBlockCompleted(conveyor, manipulator);
+    const bool drainIdle =
+        commonPauseContractDrainIdle(conveyor, manipulator, nowMs);
+    const bool canConfirmHold =
+        trusted &&
+        bufOk &&
+        sealerOkForHold &&
+        drainIdle &&
+        g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed;
+
+    if (fillLastBlockCompleted && !g_pauseRuntime.fillLastBlockCompletionLatched) {
+        g_pauseRuntime.fillLastBlockCompletionLatched = true;
+        Serial.print("COMMON: pause fill_last_block completed; ");
+        Serial.print("gate=node_ready+trusted_buffer_empty+idle_tail+outfeed_ready");
+        Serial.print(", pause_state=");
+        Serial.print(commonPauseStateName(g_commonCycle.pauseState));
+        Serial.print(", node_state=");
+        Serial.print(commonPauseNodeStateName(g_pauseRuntime.conveyorSnapshot.nodeState));
+        Serial.print(", buffer_count=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCount);
+        Serial.print(", buffer_valid=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "yes" : "no");
+        Serial.print(", buffer_fresh=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountFresh ? "yes" : "no");
+        Serial.print(", buffer_source=");
+        Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+        Serial.print(", sealer_count=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCount);
+        Serial.print(", sealer_valid=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "yes" : "no");
+        Serial.print(", sealer_fresh=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountFresh ? "yes" : "no");
+        Serial.print(", sealer_source=");
+        Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+        Serial.print(", drain_idle=");
+        Serial.print(drainIdle ? "yes" : "no");
+        Serial.print(", can_confirm_hold=");
+        Serial.println(canConfirmHold ? "yes" : "no");
+        if (!canConfirmHold) {
+            commonPauseRuntimeRestartArmingWindow(
+                nowMs,
+                "fill_last_block_completed_waits_terminal_outcome");
+        }
+    }
+
+    if (canConfirmHold) {
+        const bool outcomePauseEmpty = g_pauseRuntime.conveyorSnapshot.sealerCount == 0;
+        Serial.print("COMMON: pause terminal gate satisfied; ");
+        Serial.print("trusted=");
+        Serial.print(trusted ? "yes" : "no");
+        Serial.print(", buffer_empty=");
+        Serial.print(bufOk ? "yes" : "no");
+        Serial.print(", sealer_ok=");
+        Serial.print(sealerOkForHold ? "yes" : "no");
+        Serial.print(", drain_idle=");
+        Serial.print(drainIdle ? "yes" : "no");
+        Serial.print(", node_epoch_confirmed=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "yes" : "no");
+        Serial.print(", fill_last_block_completed=");
+        Serial.print(fillLastBlockCompleted ? "yes" : "no");
+        Serial.print(", buffer_count=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCount);
+        Serial.print(", buffer_valid=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "yes" : "no");
+        Serial.print(", buffer_fresh=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountFresh ? "yes" : "no");
+        Serial.print(", buffer_source=");
+        Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+        Serial.print(", sealer_count=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCount);
+        Serial.print(", sealer_valid=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "yes" : "no");
+        Serial.print(", sealer_fresh=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountFresh ? "yes" : "no");
+        Serial.print(", sealer_source=");
+        Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+        Serial.print(", sealer_residual_known=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.sealerResidualKnown ? "yes" : "no");
+        Serial.print(", selected_outcome=");
+        Serial.println(outcomePauseEmpty ? "pause_empty" : "pause_hold");
+        if (g_pauseRuntime.conveyorSnapshot.sealerCount == 0) {
+            commonPauseRuntimeApplyState(CommonPauseRuntimeState::PauseEmpty);
+            commonSetEventIfChanged("COMMON: pause outcome=pause_empty");
+        } else {
+            commonPauseRuntimeApplyState(CommonPauseRuntimeState::PauseHold);
+            commonSetEventIfChanged("COMMON: pause outcome=pause_hold");
+        }
+        commonPauseRuntimeClearMandatoryUnloadTracking();
+        g_pauseRuntime.armingSinceMs = 0;
+        commonPauseRuntimeUpdateSnapshots(conveyor, nowMs);
+        return;
+    }
+
+    const bool fillLastBlockBlockedByResidual =
+        g_pauseRuntime.finalizeStarted &&
+        g_commonCycle.pauseState == CommonPauseState::FillLastBlock &&
+        trusted &&
+        g_pauseRuntime.conveyorSnapshot.bufferCountValid &&
+        g_pauseRuntime.conveyorSnapshot.bufferCountFresh &&
+        g_pauseRuntime.conveyorSnapshot.bufferCount > 0 &&
+        !conveyorNextBatchReadyForCommon(conveyor, g_commonCycle.lastConsumedBatchSeq) &&
+        !conveyorProgram1Active(conveyor) &&
+        !deviceStatusBusy(conveyor) &&
+        !deviceStatusBusy(manipulator) &&
+        !conveyorStep2Active(conveyor) &&
+        !conveyorVfdTimedRunActive(conveyor);
+
+    if (fillLastBlockBlockedByResidual) {
+        if (g_pauseRuntime.fillLastBlockBlockedSinceMs == 0) {
+            g_pauseRuntime.fillLastBlockBlockedSinceMs = nowMs;
+            g_pauseRuntime.fillLastBlockBlockedLogged = false;
+        }
+        const uint32_t blockedElapsedMs =
+            static_cast<uint32_t>(nowMs - g_pauseRuntime.fillLastBlockBlockedSinceMs);
+        if (!g_pauseRuntime.fillLastBlockBlockedLogged) {
+            g_pauseRuntime.fillLastBlockBlockedLogged = true;
+            Serial.print("COMMON: pause fill_last_block blocked; ");
+            Serial.print("reason=trusted_non_empty_buffer_without_refill_path");
+            Serial.print(", buffer_count=");
+            Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCount);
+            Serial.print(", buffer_valid=");
+            Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "yes" : "no");
+            Serial.print(", buffer_fresh=");
+            Serial.print(g_pauseRuntime.conveyorSnapshot.bufferCountFresh ? "yes" : "no");
+            Serial.print(", buffer_source=");
+            Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+            Serial.print(", sealer_count=");
+            Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCount);
+            Serial.print(", sealer_valid=");
+            Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "yes" : "no");
+            Serial.print(", sealer_fresh=");
+            Serial.print(g_pauseRuntime.conveyorSnapshot.sealerCountFresh ? "yes" : "no");
+            Serial.print(", sealer_source=");
+            Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+            Serial.print(", next_batch_ready=no");
+            Serial.print(", p1_active=no");
+            Serial.print(", drain_idle=");
+            Serial.print(drainIdle ? "yes" : "no");
+            Serial.print(", fill_last_block_completed=");
+            Serial.print(fillLastBlockCompleted ? "yes" : "no");
+            Serial.print(", decision_timeout_ms=");
+            Serial.println(COMMON_PAUSE_FILL_LAST_BLOCK_DECISION_MS);
+            commonSetEventIfChanged(
+                "COMMON: pause_fill_last_block blocked, terminal decision pending");
+        }
+        if (blockedElapsedMs >= COMMON_PAUSE_FILL_LAST_BLOCK_DECISION_MS) {
+            String reason =
+                "pause_finalize_gate_unsatisfied cause=fill_last_block_non_empty_buffer";
+            reason += ", decision_elapsed_ms=" + String(blockedElapsedMs);
+            reason += ", decision_timeout_ms=" +
+                String(COMMON_PAUSE_FILL_LAST_BLOCK_DECISION_MS);
+            reason += ", substate=" + String(commonPauseRuntimeSubstateName(conveyor, manipulator));
+            reason += ", hold_gate_trusted=" + String(trusted ? "yes" : "no");
+            reason += ", hold_gate_buffer_empty=" + String(bufOk ? "yes" : "no");
+            reason += ", hold_gate_sealer_ok=" + String(sealerOkForHold ? "yes" : "no");
+            reason += ", hold_gate_drain_idle=" + String(drainIdle ? "yes" : "no");
+            reason += ", hold_gate_node_epoch=" +
+                String(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "yes" : "no");
+            reason += ", hold_gate_fill_last_block_completed=" +
+                String(fillLastBlockCompleted ? "yes" : "no");
+            reason += ", buffer_count=" + String(g_pauseRuntime.conveyorSnapshot.bufferCount);
+            reason += ", buffer_valid=" +
+                String(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "yes" : "no");
+            reason += ", buffer_fresh=" +
+                String(g_pauseRuntime.conveyorSnapshot.bufferCountFresh ? "yes" : "no");
+            reason += ", buffer_source=" +
+                String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+            reason += ", sealer_count=" + String(g_pauseRuntime.conveyorSnapshot.sealerCount);
+            reason += ", sealer_valid=" +
+                String(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "yes" : "no");
+            reason += ", sealer_fresh=" +
+                String(g_pauseRuntime.conveyorSnapshot.sealerCountFresh ? "yes" : "no");
+            reason += ", sealer_source=" +
+                String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+            reason += ", sealer_residual_known=" +
+                String(g_pauseRuntime.conveyorSnapshot.sealerResidualKnown ? "yes" : "no");
+            commonPauseEscalateToManualRecovery(reason, "finalize_gate");
+            return;
+        }
+    } else {
+        g_pauseRuntime.fillLastBlockBlockedSinceMs = 0;
+        g_pauseRuntime.fillLastBlockBlockedLogged = false;
+    }
+
+    if (g_pauseRuntime.armingSinceMs == 0) {
+        g_pauseRuntime.armingSinceMs = nowMs;
+    }
+
+    const uint32_t armingElapsedMs = commonPauseRuntimeArmingElapsedMs(nowMs);
+    const uint32_t noProgressMs = commonPauseRuntimeNoProgressMs(nowMs);
+    const bool mandatoryUnloadInFlight =
+        commonPauseRuntimeMandatoryUnloadInFlight(conveyor, manipulator);
+    const bool mandatoryUnloadPolicyActive =
+        commonPauseRuntimeMandatoryUnloadPolicyActive();
+    const bool forceDrainStableWaitPolicyActive =
+        commonPauseRuntimeForceDrainStableWaitPolicyActive();
+    const uint32_t armingTimeoutLimitMs = mandatoryUnloadPolicyActive
+        ? COMMON_PAUSE_MANDATORY_UNLOAD_TIMEOUT_MS
+        : COMMON_PAUSE_ARMING_TIMEOUT_MS;
+    const bool noProgressGuardActive = mandatoryUnloadPolicyActive;
+    const char *watchdogProfile = commonPauseRuntimeWatchdogProfileName(
+        mandatoryUnloadPolicyActive);
+    const char *watchdogPolicyReason = commonPauseRuntimeWatchdogPolicyReason(
+        mandatoryUnloadPolicyActive,
+        mandatoryUnloadInFlight);
+    if (!g_pauseRuntime.watchdogPolicyKnown ||
+        g_pauseRuntime.lastWatchdogPolicyMandatoryUnload != mandatoryUnloadPolicyActive ||
+        g_pauseRuntime.lastWatchdogPolicyMandatoryInFlight != mandatoryUnloadInFlight ||
+        g_pauseRuntime.lastWatchdogPolicyForceDrainStableWait != forceDrainStableWaitPolicyActive) {
+        g_pauseRuntime.watchdogPolicyKnown = true;
+        g_pauseRuntime.lastWatchdogPolicyMandatoryUnload = mandatoryUnloadPolicyActive;
+        g_pauseRuntime.lastWatchdogPolicyMandatoryInFlight = mandatoryUnloadInFlight;
+        g_pauseRuntime.lastWatchdogPolicyForceDrainStableWait = forceDrainStableWaitPolicyActive;
+        Serial.print("COMMON: pause watchdog policy selected, profile=");
+        Serial.print(watchdogProfile);
+        Serial.print(", reason=");
+        Serial.print(watchdogPolicyReason);
+        Serial.print(", arming_timeout_limit_ms=");
+        Serial.print(armingTimeoutLimitMs);
+        Serial.print(", watchdog_active=");
+        Serial.print(commonPauseRuntimeWatchdogActive() ? "yes" : "no");
+        Serial.print(", force_drain_stable_wait_policy=");
+        Serial.print(forceDrainStableWaitPolicyActive ? "yes" : "no");
+        Serial.print(", no_progress_guard=");
+        Serial.print(noProgressGuardActive ? "hold" : "normal");
+        Serial.print(", hold_gate_trusted=");
+        Serial.print(trusted ? "yes" : "no");
+        Serial.print(", hold_gate_buffer_empty=");
+        Serial.print(bufOk ? "yes" : "no");
+        Serial.print(", hold_gate_sealer_ok=");
+        Serial.print(sealerOkForHold ? "yes" : "no");
+        Serial.print(", hold_gate_drain_idle=");
+        Serial.print(drainIdle ? "yes" : "no");
+        Serial.print(", hold_gate_node_epoch=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "yes" : "no");
+        Serial.print(", hold_gate_fill_last_block_completed=");
+        Serial.print(fillLastBlockCompleted ? "yes" : "no");
+        Serial.print(", buffer_source=");
+        Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+        Serial.print(", sealer_source=");
+        Serial.println(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+    }
+    if (g_pauseRuntime.lastWatchdogWaitLogMs == 0 ||
+        static_cast<uint32_t>(nowMs - g_pauseRuntime.lastWatchdogWaitLogMs) >=
+            COMMON_PAUSE_ARMING_WAIT_LOG_MS) {
+        g_pauseRuntime.lastWatchdogWaitLogMs = nowMs;
+        Serial.print("COMMON: pause watchdog wait, elapsed_ms=");
+        Serial.print(armingElapsedMs);
+        Serial.print(", no_progress_ms=");
+        Serial.print(noProgressMs);
+        Serial.print(", arming_timeout_limit_ms=");
+        Serial.print(armingTimeoutLimitMs);
+        Serial.print(", substate=");
+        Serial.print(commonPauseRuntimeSubstateName(conveyor, manipulator));
+        Serial.print(", mandatory_unload_active=");
+        Serial.print(g_pauseRuntime.mandatoryUnloadActive ? "yes" : "no");
+        Serial.print(", mandatory_unload_in_flight=");
+        Serial.print(mandatoryUnloadInFlight ? "yes" : "no");
+        Serial.print(", watchdog_active=");
+        Serial.print(commonPauseRuntimeWatchdogActive() ? "yes" : "no");
+        Serial.print(", watchdog_profile=");
+        Serial.print(watchdogProfile);
+        Serial.print(", watchdog_policy_reason=");
+        Serial.print(watchdogPolicyReason);
+        Serial.print(", force_drain_stable_wait_policy=");
+        Serial.print(forceDrainStableWaitPolicyActive ? "yes" : "no");
+        Serial.print(", no_progress_guard=");
+        Serial.print(noProgressGuardActive ? "hold" : "normal");
+        Serial.print(", hold_gate_trusted=");
+        Serial.print(trusted ? "yes" : "no");
+        Serial.print(", hold_gate_buffer_empty=");
+        Serial.print(bufOk ? "yes" : "no");
+        Serial.print(", hold_gate_sealer_ok=");
+        Serial.print(sealerOkForHold ? "yes" : "no");
+        Serial.print(", hold_gate_drain_idle=");
+        Serial.print(drainIdle ? "yes" : "no");
+        Serial.print(", hold_gate_node_epoch=");
+        Serial.print(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "yes" : "no");
+        Serial.print(", hold_gate_fill_last_block_completed=");
+        Serial.print(fillLastBlockCompleted ? "yes" : "no");
+        Serial.print(", buffer_source=");
+        Serial.print(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+        Serial.print(", sealer_source=");
+        Serial.println(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+    }
+
+    const bool armingTimeoutExceeded = armingElapsedMs >= armingTimeoutLimitMs;
+    const bool noProgressTimeoutExceeded =
+        !noProgressGuardActive && noProgressMs >= COMMON_PAUSE_ARMING_NO_PROGRESS_MS;
+    if (armingTimeoutExceeded || noProgressTimeoutExceeded) {
+        String reason = "pause_arming_timeout elapsed_ms=" + String(armingElapsedMs) +
+            ", no_progress_ms=" + String(noProgressMs);
+        reason += ", arming_timeout_limit_ms=" + String(armingTimeoutLimitMs);
+        reason += ", substate=" + String(commonPauseRuntimeSubstateName(conveyor, manipulator));
+        reason += ", mandatory_unload_active=" + String(g_pauseRuntime.mandatoryUnloadActive ? "yes" : "no");
+        reason += ", mandatory_unload_in_flight=" + String(mandatoryUnloadInFlight ? "yes" : "no");
+        reason += ", watchdog_policy_reason=" + String(watchdogPolicyReason);
+        reason += ", no_progress_guard=" + String(noProgressGuardActive ? "hold" : "normal");
+        reason += ", hold_gate_trusted=" + String(trusted ? "yes" : "no");
+        reason += ", hold_gate_buffer_empty=" + String(bufOk ? "yes" : "no");
+        reason += ", hold_gate_sealer_ok=" + String(sealerOkForHold ? "yes" : "no");
+        reason += ", hold_gate_drain_idle=" + String(drainIdle ? "yes" : "no");
+        reason += ", hold_gate_node_epoch=" +
+            String(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "yes" : "no");
+        reason += ", hold_gate_fill_last_block_completed=" +
+            String(fillLastBlockCompleted ? "yes" : "no");
+        reason += ", buffer_source=" +
+            String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource));
+        reason += ", sealer_source=" +
+            String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource));
+        commonPauseEscalateToManualRecovery(reason, "watchdog");
+    }
+}
+
+bool conveyorBusyLikelyBlocksProgram1Start(const Rs485DeviceState &conveyor)
+{
+    if (!deviceStatusBusy(conveyor)) {
+        return false;
+    }
+
+    const bool post7RelatedBusy =
+        conveyorStep2Active(conveyor) ||
+        conveyorVfdTimedRunActive(conveyor) ||
+        conveyorSealerBusy(conveyor);
+    return !post7RelatedBusy;
+}
+
+CommonRefillLaunchResult commonTryStartConveyorRefill(const String &reason, bool allowBusySkip)
+{
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    if (!conveyor.online || !conveyor.protocolOk) {
+        g_lastCommandResult = "COMMON failed: conveyor offline";
+        Serial.println(g_lastCommandResult);
+        commonClearRefillPending();
+        return CommonRefillLaunchResult::Failed;
+    }
+    if (deviceStatusAlarm(conveyor) || conveyorPost7ManualRecoveryRequired(conveyor)) {
+        commonClearRefillPending();
+        String faultText = "COMMON: refill blocked by conveyor fault (" + reason + ")";
+        faultText += ", alarm=" + String(deviceStatusAlarm(conveyor) ? "yes" : "no");
+        faultText += ", manual_recovery=" + String(conveyorPost7ManualRecoveryRequired(conveyor) ? "yes" : "no");
+        commonSetEventIfChanged(faultText);
+        return CommonRefillLaunchResult::Failed;
+    }
+
+    const uint16_t batchSeq = conveyorBatchSeq(conveyor);
+    const bool hasReadyBatch = conveyorBatchReady(conveyor);
+    const bool nextBatchReady = conveyorNextBatchReadyForCommon(
+        conveyor,
+        g_commonCycle.lastConsumedBatchSeq);
+    const bool staleReadyBatch = conveyorReadyBatchIsStaleForCommon(
+        conveyor,
+        g_commonCycle.lastConsumedBatchSeq);
+
+    if (nextBatchReady) {
+        commonClearRefillPending();
+        commonSetEventIfChanged("COMMON: refill skipped because already ready (new batch, " +
+                                reason +
+                                ", seq=" + String(batchSeq) +
+                                ", consumed=" + String(g_commonCycle.lastConsumedBatchSeq) + ")");
+        return CommonRefillLaunchResult::AlreadyReady;
+    }
+
+    if (staleReadyBatch) {
+        commonSetEventIfChanged("COMMON: ready but stale batch (" + reason +
+                                ", seq=" + String(batchSeq) +
+                                ", consumed=" + String(g_commonCycle.lastConsumedBatchSeq) + ")");
+    } else if (hasReadyBatch && batchSeq == 0U) {
+        commonSetEventIfChanged("COMMON: batch ready without sequence (" + reason +
+                                "), treating as not-next");
+    }
+
+    if (conveyorProgram1Active(conveyor)) {
+        commonClearRefillPending();
+        commonSetEventIfChanged("COMMON: refill skipped because program1 already active (" + reason +
+                                ", ready=" + String(hasReadyBatch ? "yes" : "no") +
+                                ", seq=" + String(batchSeq) + ")");
+        return CommonRefillLaunchResult::AlreadyProgram1Active;
+    }
+
+    const uint32_t nowMs = millis();
+    if (g_commonCycle.refillStartPending) {
+        if (commonRefillPendingFresh(nowMs)) {
+            return CommonRefillLaunchResult::Pending;
+        }
+        commonClearRefillPending();
+    }
+
+    if (allowBusySkip && conveyorBusyLikelyBlocksProgram1Start(conveyor)) {
+        commonSetEventIfChanged("COMMON: refill skipped because conveyor busy (" + reason + ")");
+        return CommonRefillLaunchResult::SkippedBusy;
+    }
+
+    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "1", "common_conv_p1")) {
+        g_lastCommandResult = "COMMON failed: CONV 1 send error";
+        Serial.println(g_lastCommandResult);
+        commonClearRefillPending();
+        return CommonRefillLaunchResult::Failed;
+    }
+
+    g_commonCycle.refillStartPending = true;
+    g_commonCycle.refillStartRequestedMs = nowMs;
+    if (staleReadyBatch) {
+        commonSetEventIfChanged("COMMON: need refill because last ready batch already consumed (" +
+                                reason +
+                                ", stale_seq=" + String(batchSeq) +
+                                ", consumed=" + String(g_commonCycle.lastConsumedBatchSeq) +
+                                "); refill start requested");
+    } else {
+        commonSetEventIfChanged("COMMON: refill start requested (" + reason + ")");
+    }
+    return CommonRefillLaunchResult::Requested;
+}
+
+bool commonAbortReasonSuggestsManualRecovery(const String &reason)
+{
+    String upper = reason;
+    upper.toUpperCase();
+    return upper.indexOf("ALARM") >= 0 ||
+        upper.indexOf("MANUAL RECOVERY") >= 0 ||
+        upper.indexOf("TIMEOUT") >= 0;
+}
+
+void commonResetAfterAbortFinalization()
+{
+    g_commonCycle.active = false;
+    g_commonCycle.pauseRequested = false;
+    g_commonCycle.pauseState = CommonPauseState::None;
+    g_commonCycle.step3Seen = false;
+    g_commonCycle.step3LaunchDone = false;
+    g_commonCycle.parallelLaunchDone = false;
+    g_commonCycle.refillStartPending = false;
+    g_commonCycle.currentCycleLoadsSealer = false;
+    g_commonCycle.outfeedStartIssued = false;
+    g_commonCycle.outfeedNotReadyObserved = false;
+    g_commonCycle.refillStartRequestedMs = 0;
+    g_commonCycle.outfeedStartedMs = 0;
+    g_commonCycle.pauseStrictSnapshotSinceMs = 0;
+    g_commonCycle.pauseStrictSnapshotRetryMs = 0;
+    g_commonCycle.post7SealerCompletionSeqBase = 0;
+    g_commonCycle.pauseStrictSnapshotForceDrain = false;
+    g_commonCycle.pauseForceDrainApplied = false;
+    g_commonCycle.pauseStrictGateLatched = false;
+    g_commonCycle.pauseStrictRollbackBlockedLogged = false;
+    g_commonCycle.sealerDonePendingUnload = false;
+    g_commonCycle.abortDrainActive = false;
+    g_commonCycle.abortFsinvPending = false;
+    g_commonCycle.abortRequiresManualRecovery = false;
+    g_commonCycle.abortDrainLastOutfeedReady = false;
+    g_commonCycle.abortDrainLastStep2Active = false;
+    g_commonCycle.abortDrainLastVfdActive = false;
+    g_commonCycle.abortDrainStartedMs = 0;
+    g_commonCycle.abortDrainLastProgressMs = 0;
+    g_commonCycle.abortDrainLastWaitLogMs = 0;
+    g_commonCycle.abortDrainLastStep2Seq = 0;
+    g_commonCycle.abortDrainLastSealerSeq = 0;
+    g_commonCycle.abortDrainSettleActive = false;
+    g_commonCycle.abortDrainSettleSinceMs = 0;
+    g_commonCycle.abortDrainSettleChecks = 0;
+    g_commonCycle.abortReason = "";
+    g_commonCycle.stage = CommonCycleStage::Idle;
+    g_commonCycle.cycleId = 0;
+    commonPauseRuntimeDeactivate();
+}
+
+void commonFinalizeAbortState(const String &reason,
+                              CommonAbortDrainOutcome outcome,
+                              bool manualRecoveryRequired,
+                              bool sendFsinvNow,
+                              const char *fsinvOrigin,
+                              const String &details = "")
+{
+    const bool fsinvDeferred = g_commonCycle.abortFsinvPending;
+    if (sendFsinvNow || g_commonCycle.abortFsinvPending) {
+        if (fsinvDeferred) {
+            Serial.println("COMMON: sending deferred FSINV after abort supervision outcome.");
+        }
+        if (!i2cSendManagedDeviceCommand(
+                CONVEYOR_ID,
+                "FSINV",
+                (fsinvOrigin == nullptr || fsinvOrigin[0] == '\0')
+                    ? "common_abort_fsinv"
+                    : fsinvOrigin)) {
+            Serial.println("COMMON warning: CONV FSINV send error");
+        } else {
+            Serial.println("COMMON: FSINV sent.");
+        }
+    }
+
+    commonResetAfterAbortFinalization();
+    g_commonCycle.runtimeState = manualRecoveryRequired
+        ? CommonRuntimeState::ManualRecoveryRequired
+        : CommonRuntimeState::CommonAborted;
+    g_commonCycle.abortDrainOutcome = outcome;
+    g_commonCycle.abortRequiresManualRecovery = manualRecoveryRequired;
+    g_commonCycle.abortReason = reason;
+    if (manualRecoveryRequired) {
+        commonPauseRuntimeApplyState(CommonPauseRuntimeState::ManualRecoveryRequired);
+    } else {
+        commonPauseRuntimeDeactivate();
+    }
+
+    String finalEvent = "COMMON: abort outcome=" + String(commonAbortDrainOutcomeName(outcome));
+    finalEvent += manualRecoveryRequired ? ", manual recovery required" : ", common aborted";
+    if (!details.isEmpty()) {
+        finalEvent += " (" + details + ")";
+    }
+
+    g_commonCycle.lastEvent = finalEvent;
+    g_lastCommandResult = finalEvent;
+    Serial.println(g_lastCommandResult);
+    (void)mqttPublishStatus(false);
+}
+
+CommonAbortPost7Decision commonAbortDecidePost7Action(const Rs485DeviceState &conveyor,
+                                                      CommonAbortPost7Policy policy,
+                                                      String &diag)
+{
+    diag = "";
+    if (policy != CommonAbortPost7Policy::AllowDrainToSafe || !g_commonCycle.outfeedStartIssued) {
+        diag = "policy=force_stop_or_post7_not_started";
+        return CommonAbortPost7Decision::ForceStop;
+    }
+
+    const bool conveyorOnline = conveyor.online && conveyor.protocolOk;
+    if (!conveyorOnline) {
+        diag = "conveyor_offline";
+        return CommonAbortPost7Decision::ForceStop;
+    }
+
+    const bool outfeedReady = conveyorOutfeedReadyForBatch(conveyor);
+    const bool outfeedStep2Active = conveyorStep2Active(conveyor);
+    const bool outfeedVfdActive = conveyorVfdTimedRunActive(conveyor);
+    const uint8_t outfeedStep2Seq = conveyorStep2CompletionSeq(conveyor);
+    const bool outfeedStep2SeqAdvanced = outfeedStep2Seq != g_commonCycle.outfeedStep2SeqBase;
+    const uint8_t sealerSeq = conveyorSealerCompletionSeq(conveyor);
+    const bool sealerSeqAdvanced = sealerSeq != g_commonCycle.post7SealerCompletionSeqBase;
+    const bool sealerDoneForJob = !g_commonCycle.currentCycleLoadsSealer || sealerSeqAdvanced;
+    const bool tailInactive = !outfeedStep2Active && !outfeedVfdActive;
+
+    const bool explicitDrainMarkers =
+        outfeedStep2Active ||
+        outfeedVfdActive ||
+        outfeedStep2SeqAdvanced ||
+        sealerSeqAdvanced;
+    const bool alreadySettled = outfeedReady &&
+        tailInactive &&
+        sealerDoneForJob &&
+        (g_commonCycle.outfeedNotReadyObserved || outfeedStep2SeqAdvanced || sealerSeqAdvanced);
+    const bool drainWindow = explicitDrainMarkers && !alreadySettled;
+
+    diag = "outfeed_ready=" + String(outfeedReady ? "yes" : "no");
+    diag += ", outfeed_seen_not_ready=" + String(g_commonCycle.outfeedNotReadyObserved ? "yes" : "no");
+    diag += ", outfeed_step2=" + String(outfeedStep2Active ? "yes" : "no");
+    diag += ", outfeed_vfd=" + String(outfeedVfdActive ? "yes" : "no");
+    diag += ", tail_inactive=" + String(tailInactive ? "yes" : "no");
+    diag += ", outfeed_seq=" + String(outfeedStep2Seq);
+    diag += ", outfeed_seq_base=" + String(g_commonCycle.outfeedStep2SeqBase);
+    diag += ", sealer_seq=" + String(sealerSeq);
+    diag += ", sealer_seq_base=" + String(g_commonCycle.post7SealerCompletionSeqBase);
+    diag += ", sealer_seq_advanced=" + String(sealerSeqAdvanced ? "yes" : "no");
+    diag += ", sealer_done_for_job=" + String(sealerDoneForJob ? "yes" : "no");
+
+    if (alreadySettled) {
+        return CommonAbortPost7Decision::SkipAlreadySettled;
+    }
+    if (drainWindow) {
+        return CommonAbortPost7Decision::SkipDrainToSafe;
+    }
+    return CommonAbortPost7Decision::ForceStop;
+}
+
+void commonBeginAbortDrainSupervision(const String &reason,
+                                      bool manualRecoveryRequired,
+                                      const Rs485DeviceState &conveyor,
+                                      const String &diag)
+{
+    const uint32_t nowMs = millis();
+    const bool conveyorOnline = conveyor.online && conveyor.protocolOk;
+    const bool outfeedReady = conveyorOnline && conveyorOutfeedReadyForBatch(conveyor);
 
     g_commonCycle.active = false;
     g_commonCycle.pauseRequested = false;
     g_commonCycle.pauseState = CommonPauseState::None;
+    g_commonCycle.step3Seen = false;
     g_commonCycle.step3LaunchDone = false;
     g_commonCycle.parallelLaunchDone = false;
-    g_commonCycle.currentCycleLoadsSealer = false;
-    g_commonCycle.sealerDonePendingUnload = false;
+    g_commonCycle.refillStartPending = false;
+    g_commonCycle.refillStartRequestedMs = 0;
+    g_commonCycle.pauseStrictSnapshotSinceMs = 0;
+    g_commonCycle.pauseStrictSnapshotRetryMs = 0;
+    g_commonCycle.pauseStrictSnapshotForceDrain = false;
+    g_commonCycle.pauseForceDrainApplied = false;
+    g_commonCycle.pauseStrictGateLatched = false;
+    g_commonCycle.pauseStrictRollbackBlockedLogged = false;
     g_commonCycle.stage = CommonCycleStage::Idle;
-    g_commonCycle.lastEvent = reason;
-    g_lastCommandResult = reason;
-    Serial.println(reason);
+    g_commonCycle.cycleId = 0;
+    g_commonCycle.runtimeState = CommonRuntimeState::CommonAborted;
+    g_commonCycle.abortDrainOutcome = CommonAbortDrainOutcome::InProgress;
+    g_commonCycle.abortDrainActive = true;
+    g_commonCycle.abortFsinvPending = true;
+    g_commonCycle.abortRequiresManualRecovery = manualRecoveryRequired;
+    g_commonCycle.abortReason = reason;
+    g_commonCycle.abortDrainStartedMs = nowMs;
+    g_commonCycle.abortDrainLastProgressMs = nowMs;
+    g_commonCycle.abortDrainLastWaitLogMs = nowMs;
+    g_commonCycle.abortDrainLastOutfeedReady = outfeedReady;
+    g_commonCycle.abortDrainLastStep2Active = conveyorOnline && conveyorStep2Active(conveyor);
+    g_commonCycle.abortDrainLastVfdActive = conveyorOnline && conveyorVfdTimedRunActive(conveyor);
+    g_commonCycle.abortDrainLastStep2Seq = conveyorOnline ? conveyorStep2CompletionSeq(conveyor) : 0U;
+    g_commonCycle.abortDrainLastSealerSeq = conveyorOnline ? conveyorSealerCompletionSeq(conveyor) : 0U;
+    g_commonCycle.abortDrainSettleActive = false;
+    g_commonCycle.abortDrainSettleSinceMs = 0;
+    g_commonCycle.abortDrainSettleChecks = 0;
+    if (!outfeedReady) {
+        g_commonCycle.outfeedNotReadyObserved = true;
+    }
+    commonPauseRuntimeDeactivate();
+
+    String event = "COMMON: abort keeps POST7 drain-to-safe under supervision, FSINV deferred";
+    if (!diag.isEmpty()) {
+        event += " (" + diag + ")";
+    }
+    g_commonCycle.lastEvent = event;
+    g_lastCommandResult = event;
+    Serial.println(g_lastCommandResult);
     (void)mqttPublishStatus(false);
+}
+
+void processCommonAbortDrainSupervision(uint32_t nowMs, const Rs485DeviceState &conveyor)
+{
+    if (!g_commonCycle.abortDrainActive) {
+        return;
+    }
+
+    const bool conveyorOnline = conveyor.online && conveyor.protocolOk;
+    if (!conveyorOnline) {
+        const uint32_t elapsedMs = static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainStartedMs);
+        commonFinalizeAbortState(
+            g_commonCycle.abortReason,
+            CommonAbortDrainOutcome::LostSupervision,
+            true,
+            true,
+            "common_abort_drain_fsinv",
+            "elapsed_ms=" + String(elapsedMs));
+        return;
+    }
+
+    const bool outfeedReady = conveyorOutfeedReadyForBatch(conveyor);
+    const bool outfeedStep2Active = conveyorStep2Active(conveyor);
+    const bool outfeedVfdActive = conveyorVfdTimedRunActive(conveyor);
+    const uint8_t outfeedStep2Seq = conveyorStep2CompletionSeq(conveyor);
+    const uint8_t sealerSeq = conveyorSealerCompletionSeq(conveyor);
+    const bool sealerSeqAdvanced = sealerSeq != g_commonCycle.post7SealerCompletionSeqBase;
+    const bool sealerDoneForJob = !g_commonCycle.currentCycleLoadsSealer || sealerSeqAdvanced;
+    if (!g_commonCycle.outfeedNotReadyObserved && !outfeedReady) {
+        g_commonCycle.outfeedNotReadyObserved = true;
+    }
+
+    bool progress = false;
+    String progressDiag;
+    if (outfeedReady != g_commonCycle.abortDrainLastOutfeedReady) {
+        progress = true;
+        progressDiag += "outfeed_ready=" + String(outfeedReady ? "yes" : "no");
+    }
+    if (outfeedStep2Active && !g_commonCycle.abortDrainLastStep2Active) {
+        if (!progressDiag.isEmpty()) {
+            progressDiag += ", ";
+        }
+        progress = true;
+        progressDiag += "step2_active_rise";
+    }
+    if (outfeedVfdActive && !g_commonCycle.abortDrainLastVfdActive) {
+        if (!progressDiag.isEmpty()) {
+            progressDiag += ", ";
+        }
+        progress = true;
+        progressDiag += "vfd_active_rise";
+    }
+    if (outfeedStep2Seq != g_commonCycle.abortDrainLastStep2Seq) {
+        if (!progressDiag.isEmpty()) {
+            progressDiag += ", ";
+        }
+        progress = true;
+        progressDiag += "step2_seq=" + String(outfeedStep2Seq);
+    }
+    if (sealerSeq != g_commonCycle.abortDrainLastSealerSeq) {
+        if (!progressDiag.isEmpty()) {
+            progressDiag += ", ";
+        }
+        progress = true;
+        progressDiag += "sealer_seq=" + String(sealerSeq);
+    }
+
+    g_commonCycle.abortDrainLastOutfeedReady = outfeedReady;
+    g_commonCycle.abortDrainLastStep2Active = outfeedStep2Active;
+    g_commonCycle.abortDrainLastVfdActive = outfeedVfdActive;
+    g_commonCycle.abortDrainLastStep2Seq = outfeedStep2Seq;
+    g_commonCycle.abortDrainLastSealerSeq = sealerSeq;
+
+    if (progress) {
+        g_commonCycle.abortDrainLastProgressMs = nowMs;
+        Serial.print("COMMON: drain progress ");
+        Serial.println(progressDiag);
+    }
+
+    if (deviceStatusAlarm(conveyor) || conveyorPost7ManualRecoveryRequired(conveyor)) {
+        String details = "conveyor_alarm=" + String(deviceStatusAlarm(conveyor) ? "yes" : "no");
+        details += ", manual_recovery_latch=" +
+            String(conveyorPost7ManualRecoveryRequired(conveyor) ? "yes" : "no");
+        commonFinalizeAbortState(
+            g_commonCycle.abortReason,
+            CommonAbortDrainOutcome::LocalFault,
+            true,
+            true,
+            "common_abort_drain_fsinv",
+            details);
+        return;
+    }
+
+    const bool safeFinalCandidate = outfeedReady &&
+        sealerDoneForJob &&
+        !outfeedStep2Active &&
+        !outfeedVfdActive;
+    if (safeFinalCandidate) {
+        if (!g_commonCycle.abortDrainSettleActive) {
+            g_commonCycle.abortDrainSettleActive = true;
+            g_commonCycle.abortDrainSettleSinceMs = nowMs;
+            g_commonCycle.abortDrainSettleChecks = 1;
+            Serial.print("COMMON: drain settle started");
+            Serial.print(", outfeed_ready=");
+            Serial.print(outfeedReady ? "yes" : "no");
+            Serial.print(", sealer_done_for_job=");
+            Serial.print(sealerDoneForJob ? "yes" : "no");
+            Serial.print(", step2_active=");
+            Serial.print(outfeedStep2Active ? "yes" : "no");
+            Serial.print(", vfd_active=");
+            Serial.println(outfeedVfdActive ? "yes" : "no");
+        } else if (g_commonCycle.abortDrainSettleChecks < 0xFFU) {
+            g_commonCycle.abortDrainSettleChecks++;
+        }
+
+        const uint32_t settleElapsedMs = static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainSettleSinceMs);
+        const bool settleConfirmedByTime = settleElapsedMs >= COMMON_ABORT_DRAIN_SETTLE_MS;
+        const bool settleConfirmedByChecks = g_commonCycle.abortDrainSettleChecks >= COMMON_ABORT_DRAIN_SETTLE_MIN_CHECKS;
+        if (settleConfirmedByTime || settleConfirmedByChecks) {
+            commonFinalizeAbortState(
+                g_commonCycle.abortReason,
+                CommonAbortDrainOutcome::DrainedToSafe,
+                g_commonCycle.abortRequiresManualRecovery,
+                true,
+                "common_abort_drain_fsinv",
+                "outfeed_ready=yes, sealer_done_for_job=yes, step2_active=no, vfd_active=no, settle_elapsed_ms=" +
+                    String(settleElapsedMs) +
+                    ", settle_checks=" + String(g_commonCycle.abortDrainSettleChecks));
+            return;
+        }
+    } else if (g_commonCycle.abortDrainSettleActive) {
+        g_commonCycle.abortDrainSettleActive = false;
+        g_commonCycle.abortDrainSettleSinceMs = 0;
+        g_commonCycle.abortDrainSettleChecks = 0;
+        Serial.println("COMMON: drain settle reset because activity returned");
+    }
+
+    const uint32_t elapsedMs = static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainStartedMs);
+    const uint32_t noProgressMs = static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainLastProgressMs);
+    if (noProgressMs >= COMMON_ABORT_DRAIN_NO_PROGRESS_MS) {
+        commonFinalizeAbortState(
+            g_commonCycle.abortReason,
+            CommonAbortDrainOutcome::NoProgress,
+            true,
+            true,
+            "common_abort_drain_fsinv",
+            "elapsed_ms=" + String(elapsedMs) + ", no_progress_ms=" + String(noProgressMs));
+        return;
+    }
+    if (elapsedMs >= COMMON_ABORT_DRAIN_TIMEOUT_MS) {
+        commonFinalizeAbortState(
+            g_commonCycle.abortReason,
+            CommonAbortDrainOutcome::Timeout,
+            true,
+            true,
+            "common_abort_drain_fsinv",
+            "elapsed_ms=" + String(elapsedMs) + ", outfeed_ready=" + String(outfeedReady ? "yes" : "no"));
+        return;
+    }
+
+    if (static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainLastWaitLogMs) >=
+        COMMON_ABORT_DRAIN_WAIT_LOG_MS) {
+        g_commonCycle.abortDrainLastWaitLogMs = nowMs;
+        Serial.print("COMMON: drain supervision wait, elapsed_ms=");
+        Serial.print(elapsedMs);
+        Serial.print(", no_progress_ms=");
+        Serial.print(noProgressMs);
+        Serial.print(", outfeed_ready=");
+        Serial.print(outfeedReady ? "yes" : "no");
+        Serial.print(", step2_active=");
+        Serial.print(outfeedStep2Active ? "yes" : "no");
+        Serial.print(", vfd_active=");
+        Serial.print(outfeedVfdActive ? "yes" : "no");
+        Serial.print(", step2_seq=");
+        Serial.print(outfeedStep2Seq);
+        Serial.print(", step2_seq_base=");
+        Serial.print(g_commonCycle.outfeedStep2SeqBase);
+        Serial.print(", sealer_seq=");
+        Serial.print(sealerSeq);
+        Serial.print(", sealer_seq_base=");
+        Serial.print(g_commonCycle.post7SealerCompletionSeqBase);
+        Serial.print(", sealer_done_for_job=");
+        Serial.print(sealerDoneForJob ? "yes" : "no");
+        Serial.print(", settle_active=");
+        Serial.print(g_commonCycle.abortDrainSettleActive ? "yes" : "no");
+        Serial.print(", settle_checks=");
+        Serial.print(g_commonCycle.abortDrainSettleChecks);
+        Serial.print(", settle_elapsed_ms=");
+        Serial.println(g_commonCycle.abortDrainSettleActive
+            ? static_cast<uint32_t>(nowMs - g_commonCycle.abortDrainSettleSinceMs)
+            : 0U);
+    }
+}
+
+void abortCommonCycle(const String &reason,
+                      CommonAbortPost7Policy post7Policy = CommonAbortPost7Policy::ForceStop)
+{
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    Serial.print("COMMON: abort requested, reason=");
+    Serial.println(reason);
+    const bool manualRecoveryRequired =
+        commonAbortReasonSuggestsManualRecovery(reason) ||
+        (manipulator.online && manipulator.protocolOk && deviceStatusAlarm(manipulator)) ||
+        (conveyor.online && conveyor.protocolOk &&
+         (deviceStatusAlarm(conveyor) || conveyorPost7ManualRecoveryRequired(conveyor)));
+
+    String post7Diag;
+    const CommonAbortPost7Decision post7Decision = commonAbortDecidePost7Action(
+        conveyor, post7Policy, post7Diag);
+
+    if (post7Decision == CommonAbortPost7Decision::ForceStop && g_commonCycle.outfeedStartIssued) {
+        if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "POST7 STOP", "common_abort_post7_stop")) {
+            Serial.println("COMMON warning: CONV POST7 STOP send error");
+        } else {
+            Serial.println("COMMON: abort forced POST7 STOP.");
+        }
+    }
+
+    if (post7Decision == CommonAbortPost7Decision::SkipAlreadySettled) {
+        String settledEvent = "COMMON: abort sees POST7 already settled, skip STOP";
+        if (!post7Diag.isEmpty()) {
+            settledEvent += " (" + post7Diag + ")";
+        }
+        Serial.println(settledEvent);
+        commonBeginAbortDrainSupervision(reason, manualRecoveryRequired, conveyor, post7Diag);
+        return;
+    }
+
+    if (post7Decision == CommonAbortPost7Decision::SkipDrainToSafe) {
+        commonBeginAbortDrainSupervision(reason, manualRecoveryRequired, conveyor, post7Diag);
+        return;
+    }
+
+    commonFinalizeAbortState(
+        reason,
+        CommonAbortDrainOutcome::ForcedStop,
+        manualRecoveryRequired,
+        true,
+        "common_abort_fsinv",
+        post7Diag);
 }
 
 bool sendCommonManipulatorWorkCycleCommand(const String &reason, bool cycleLoadsSealer)
@@ -1216,13 +3711,26 @@ bool sendCommonManipulatorWorkCycleCommand(const String &reason, bool cycleLoads
 
     g_commonCycle.stage = CommonCycleStage::WaitManipStep7;
     g_commonCycle.currentCycleLoadsSealer = cycleLoadsSealer;
+    g_commonCycle.step3Seen = false;
     g_commonCycle.step3LaunchDone = g_commonCycle.pauseRequested || !cycleLoadsSealer;
     g_commonCycle.parallelLaunchDone = false;
+    commonResetPauseStrictSnapshotTracking();
+    commonClearRefillPending();
     g_commonCycle.manipStarts++;
     g_commonCycle.manipStartReason = reason;
     g_commonCycle.lastEvent = "COMMON: manipulator start (" + reason + ")";
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
+    if (g_commonCycle.pauseRequested &&
+        !cycleLoadsSealer &&
+        reason == "pause mandatory unload") {
+        const uint32_t nowMs = millis();
+        commonPauseRuntimeMarkMandatoryUnloadStarted(nowMs);
+        Serial.print("COMMON: pause mandatory unload supervision armed, elapsed_ms=0, substate=");
+        Serial.println(commonPauseRuntimeSubstateName(
+            g_rs485Devices[CONVEYOR_ID],
+            g_rs485Devices[MANIPULATOR_ID]));
+    }
     (void)mqttPublishStatus(false);
     return true;
 }
@@ -1240,10 +3748,17 @@ bool startCommonManipulatorWorkCycle(const String &reason, bool cycleLoadsSealer
         Serial.println(g_lastCommandResult);
         return false;
     }
+    if (deviceStatusAlarm(manipulator)) {
+        g_lastCommandResult = "COMMON failed: manipulator alarm";
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
 
     g_commonCycle.currentCycleLoadsSealer = cycleLoadsSealer;
+    g_commonCycle.step3Seen = false;
     g_commonCycle.step3LaunchDone = g_commonCycle.pauseRequested || !cycleLoadsSealer;
     g_commonCycle.parallelLaunchDone = false;
+    commonClearRefillPending();
 
     if (manipulatorInWorkStartPose(manipulator)) {
         return sendCommonManipulatorWorkCycleCommand(reason, cycleLoadsSealer);
@@ -1265,108 +3780,69 @@ bool startCommonManipulatorWorkCycle(const String &reason, bool cycleLoadsSealer
     }
 
     g_lastCommandResult =
-        "COMMON failed: manipulator not in start pose (need right + Z up + grip open)";
+        "COMMON failed: manipulator start not ready";
     Serial.println(g_lastCommandResult);
     return false;
 }
 
 bool startCommonInfeedFillAfterStep3()
 {
-    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
-    if (!conveyor.online || !conveyor.protocolOk) {
-        g_lastCommandResult = "COMMON failed: conveyor offline at step3";
-        Serial.println(g_lastCommandResult);
+    const CommonRefillLaunchResult refillResult =
+        commonTryStartConveyorRefill("parallel after step3", true);
+    if (refillResult == CommonRefillLaunchResult::Failed) {
         return false;
     }
-
-    if (conveyorBatchReady(conveyor) || conveyorProgram1Active(conveyor)) {
+    if (refillResult != CommonRefillLaunchResult::SkippedBusy) {
         g_commonCycle.step3LaunchDone = true;
-        return true;
     }
-
-    if (deviceStatusBusy(conveyor)) {
-        return true;
-    }
-
-    if (!startCommonConveyorProgram1("parallel after step3")) {
-        return false;
-    }
-
-    g_commonCycle.step3LaunchDone = true;
-    g_commonCycle.lastEvent = "COMMON: step3 reached, started P1";
-    g_lastCommandResult = g_commonCycle.lastEvent;
-    Serial.println(g_lastCommandResult);
-    (void)mqttPublishStatus(false);
     return true;
 }
 
 bool startCommonConveyorProgram1(const String &reason)
 {
-    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
-    if (!conveyor.online || !conveyor.protocolOk) {
-        g_lastCommandResult = "COMMON failed: conveyor offline";
-        Serial.println(g_lastCommandResult);
-        return false;
-    }
-    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, "1", "common_conv_p1")) {
-        g_lastCommandResult = "COMMON failed: CONV 1 send error";
-        Serial.println(g_lastCommandResult);
-        return false;
-    }
-
-    g_commonCycle.lastEvent = "COMMON: conveyor P1 start (" + reason + ")";
-    g_lastCommandResult = g_commonCycle.lastEvent;
-    Serial.println(g_lastCommandResult);
-    (void)mqttPublishStatus(false);
-    return true;
+    return commonTryStartConveyorRefill(reason, true) != CommonRefillLaunchResult::Failed;
 }
 
-bool startCommonStep7Processes(const Rs485DeviceState &conveyor, uint32_t nowMs)
+bool startCommonPost7Job(const Rs485DeviceState &conveyor, uint32_t nowMs)
 {
-    if (!startOtvodWorkCycle()) {
-        g_lastCommandResult = "COMMON failed: OTCYCLE start";
+    if (!conveyor.online || !conveyor.protocolOk) {
+        g_lastCommandResult = "COMMON failed: conveyor offline at POST7 start";
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+    if (deviceStatusAlarm(conveyor)) {
+        if (conveyorPost7ManualRecoveryRequired(conveyor)) {
+            g_lastCommandResult = "COMMON failed: conveyor manual recovery required at POST7 start";
+        } else {
+            g_lastCommandResult = "COMMON failed: conveyor alarm at POST7 start";
+        }
         Serial.println(g_lastCommandResult);
         return false;
     }
 
-    if (g_commonCycle.currentCycleLoadsSealer) {
-        if (!conveyor.online || !conveyor.protocolOk) {
-            g_lastCommandResult = "COMMON failed: conveyor offline at SEAL start";
-            Serial.println(g_lastCommandResult);
-            return false;
-        }
-        if (conveyorSealerBusy(conveyor)) {
-            g_lastCommandResult = "COMMON failed: SEAL pulse already active";
-            Serial.println(g_lastCommandResult);
-            return false;
-        }
-
-        g_sealStartPulseDurationMs = SEAL_START_PULSE_MS_DEFAULT;
-        if (!i2cSendManagedDeviceCommand(
-                CONVEYOR_ID,
-                "SEAL START " + String(g_sealStartPulseDurationMs),
-                "common_step7_seal_start")) {
-            g_lastCommandResult = "COMMON failed: CONV SEAL START send error";
-            Serial.println(g_lastCommandResult);
-            return false;
-        }
-        g_sealStartPulseActive = true;
-        g_sealStartOutputActive = true;
-        g_commonCycle.sealStartedMs = nowMs;
-        g_commonCycle.sealerDonePendingUnload = false;
-    } else {
-        g_commonCycle.sealStartedMs = 0;
-        g_commonCycle.sealerDonePendingUnload = false;
+    const String post7Mode = g_commonCycle.currentCycleLoadsSealer ? "LOAD" : "UNLOAD_ONLY";
+    const String command = "POST7 START " + post7Mode;
+    if (!i2cSendManagedDeviceCommand(CONVEYOR_ID, command, "common_step7_post7_start")) {
+        g_lastCommandResult = "COMMON failed: CONV POST7 START send error";
+        Serial.println(g_lastCommandResult);
+        return false;
     }
+
+    g_commonCycle.outfeedStartIssued = true;
+    g_commonCycle.outfeedNotReadyObserved = false;
+    g_commonCycle.outfeedStep2SeqBase = conveyorStep2CompletionSeq(conveyor);
+    g_commonCycle.post7SealerCompletionSeqBase = conveyorSealerCompletionSeq(conveyor);
+    g_commonCycle.outfeedStartedMs = nowMs;
+    g_commonCycle.sealerDonePendingUnload = false;
 
     g_commonCycle.step3LaunchDone = true;
     g_commonCycle.parallelLaunchDone = true;
     g_commonCycle.parallelStarts++;
     g_commonCycle.stage = CommonCycleStage::WaitNextBatch;
     if (g_commonCycle.currentCycleLoadsSealer) {
-        g_commonCycle.lastEvent = "COMMON: step7 reached, started OTCYCLE + SEAL";
+        g_commonCycle.lastEvent = "COMMON: step7 reached, started POST7 LOAD";
     } else {
-        g_commonCycle.lastEvent = "COMMON: step7 reached, started mandatory unload OTCYCLE";
+        g_commonCycle.lastEvent = "COMMON: step7 reached, started POST7 UNLOAD_ONLY";
     }
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
@@ -1378,22 +3854,30 @@ bool startCommonCycle()
 {
     const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
 
+    if (g_commonCycle.abortDrainActive) {
+        g_lastCommandResult = "COMMON aborted: POST7 drain supervision in progress";
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+
+    if (commonManualRecoveryRequired()) {
+        commonPauseRuntimeApplyState(CommonPauseRuntimeState::ManualRecoveryRequired);
+        g_lastCommandResult = "COMMON blocked: manual recovery required";
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        (void)mqttPublishStatus(false);
+        return false;
+    }
+
     if (g_commonCycle.active) {
-        if (g_commonCycle.pauseRequested || g_commonCycle.pauseState == CommonPauseState::StableWait) {
-            g_commonCycle.pauseRequested = false;
-            g_commonCycle.pauseState = CommonPauseState::None;
-            g_commonCycle.lastEvent = "COMMON: pause released";
-            g_lastCommandResult = g_commonCycle.lastEvent;
+        g_commonCycle.runtimeState = CommonRuntimeState::Active;
+        if (g_commonCycle.pauseRequested) {
+            g_lastCommandResult =
+                "COMMON blocked: pause active, run COMMON PAUSE RELEASE, then COMMON START";
+            g_commonCycle.lastEvent = g_lastCommandResult;
             Serial.println(g_lastCommandResult);
-            if (g_commonCycle.stage == CommonCycleStage::WaitNextBatch &&
-                !conveyorBatchReady(conveyor) &&
-                !deviceStatusBusy(conveyor) &&
-                !conveyorProgram1Active(conveyor)) {
-                (void)startCommonConveyorProgram1("resume fill");
-            } else {
-                (void)mqttPublishStatus(false);
-            }
-            return true;
+            (void)mqttPublishStatus(false);
+            return false;
         }
         g_lastCommandResult = "COMMON already active";
         Serial.println(g_lastCommandResult);
@@ -1401,15 +3885,26 @@ bool startCommonCycle()
     }
 
     g_commonCycle = CommonCycleState{};
+    g_commonCycleIdCounter++;
+    if (g_commonCycleIdCounter == 0U) {
+        g_commonCycleIdCounter = 1U;
+    }
+    g_commonCycle.cycleId = g_commonCycleIdCounter;
     g_commonCycle.active = true;
+    g_commonCycle.runtimeState = CommonRuntimeState::Active;
+    g_commonCycle.abortDrainOutcome = CommonAbortDrainOutcome::None;
+    g_commonCycle.abortReason = "";
+    g_commonCycle.abortRequiresManualRecovery = false;
     g_commonCycle.stage = CommonCycleStage::WaitInitialBatch;
     g_commonCycle.pauseState = CommonPauseState::None;
     g_commonCycle.sealerDonePendingUnload = conveyor.online &&
         conveyor.protocolOk &&
         conveyorSealerDoneActive(conveyor);
+    g_commonCycle.post7SealerCompletionSeqBase = conveyorSealerCompletionSeq(conveyor);
     g_commonCycle.lastEvent = "COMMON: waiting initial batch";
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
+    commonPauseRuntimeDeactivate();
 
     if (conveyorBatchReady(conveyor)) {
         g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
@@ -1431,6 +3926,53 @@ bool startCommonCycle()
     return true;
 }
 
+bool clearCommonRecoveryState()
+{
+    if (g_commonCycle.abortDrainActive) {
+        g_lastCommandResult = "COMMON RECOVERY CLEAR rejected: drain supervision active";
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+
+    if (!commonManualRecoveryRequired()) {
+        g_lastCommandResult = "COMMON RECOVERY CLEAR rejected: no manual recovery state";
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+    const bool conveyorOnline = conveyor.online && conveyor.protocolOk;
+    const bool manipulatorOnline = manipulator.online && manipulator.protocolOk;
+    const bool conveyorAlarm = conveyorOnline && deviceStatusAlarm(conveyor);
+    const bool conveyorManualRecovery = conveyorOnline && conveyorPost7ManualRecoveryRequired(conveyor);
+    const bool manipulatorAlarm = manipulatorOnline && deviceStatusAlarm(manipulator);
+
+    if (conveyorAlarm || conveyorManualRecovery || manipulatorAlarm) {
+        String reason = "COMMON RECOVERY CLEAR rejected: local fault/recovery still active";
+        reason += ", conveyor_alarm=" + String(conveyorAlarm ? "yes" : "no");
+        reason += ", conveyor_manual_recovery=" + String(conveyorManualRecovery ? "yes" : "no");
+        reason += ", manipulator_alarm=" + String(manipulatorAlarm ? "yes" : "no");
+        g_lastCommandResult = reason;
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+
+    commonResetAfterAbortFinalization();
+    g_commonCycle.runtimeState = CommonRuntimeState::Idle;
+    g_commonCycle.abortDrainOutcome = CommonAbortDrainOutcome::None;
+    g_commonCycle.abortRequiresManualRecovery = false;
+    g_commonCycle.abortReason = "";
+    g_commonCycle.lastEvent = "COMMON RECOVERY CLEAR accepted";
+    g_lastCommandResult = g_commonCycle.lastEvent;
+    Serial.println(g_lastCommandResult);
+    (void)mqttPublishStatus(false);
+    return true;
+}
+
 void requestCommonCyclePause()
 {
     if (!g_commonCycle.active) {
@@ -1439,44 +3981,111 @@ void requestCommonCyclePause()
         return;
     }
 
+    const bool pauseWasRequested = g_commonCycle.pauseRequested;
+    const uint32_t nowMs = millis();
     g_commonCycle.pauseRequested = true;
+    g_commonCycle.pauseForceDrainApplied = false;
+    if (!pauseWasRequested || g_pauseRuntime.currentEpoch == 0) {
+        commonPauseRuntimeBeginEpoch(nowMs);
+        g_commonCycle.pauseStrictGateLatched = false;
+        g_commonCycle.pauseStrictRollbackBlockedLogged = false;
+    }
+    commonPauseRuntimeApplyState(CommonPauseRuntimeState::PauseArming);
+    commonPauseSendArmCommands();
+    commonPausePollStatusCommands(nowMs);
     if (g_commonCycle.pauseState == CommonPauseState::None) {
         g_commonCycle.pauseState = CommonPauseState::Requested;
     }
     g_commonCycle.lastEvent = "COMMON: pause requested";
     g_lastCommandResult = g_commonCycle.lastEvent;
     Serial.println(g_lastCommandResult);
+    Serial.print("COMMON: pause request sent, epoch=");
+    Serial.println(g_pauseRuntime.currentEpoch);
     (void)mqttPublishStatus(false);
+}
+
+bool releaseCommonCyclePause()
+{
+    if (g_commonCycle.abortDrainActive) {
+        g_lastCommandResult = "COMMON PAUSE RELEASE rejected: drain supervision active";
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+    if (!g_commonCycle.active || !g_commonCycle.pauseRequested) {
+        g_lastCommandResult = "COMMON PAUSE RELEASE rejected: pause is not active";
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        return false;
+    }
+    if (!commonPauseRuntimeCanRelease()) {
+        g_lastCommandResult = "COMMON PAUSE RELEASE rejected: pause outcome is not hold/empty (" +
+            String(commonPauseRuntimeStateName(g_pauseRuntime.state)) + ")";
+        g_commonCycle.lastEvent = g_lastCommandResult;
+        Serial.println(g_lastCommandResult);
+        (void)mqttPublishStatus(false);
+        return false;
+    }
+
+    commonPauseSendReleaseCommands();
+
+    g_commonCycle = CommonCycleState{};
+    g_commonCycle.runtimeState = CommonRuntimeState::Idle;
+    g_commonCycle.abortDrainOutcome = CommonAbortDrainOutcome::None;
+    g_commonCycle.lastEvent = "COMMON: pause released; waiting new COMMON START";
+    g_lastCommandResult = g_commonCycle.lastEvent;
+    Serial.println(g_lastCommandResult);
+    commonPauseRuntimeDeactivate();
+    (void)mqttPublishStatus(false);
+    return true;
 }
 
 void processCommonCycle()
 {
+    const uint32_t nowMs = millis();
+    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
+    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
+
+    if (g_commonCycle.abortDrainActive) {
+        processCommonAbortDrainSupervision(nowMs, conveyor);
+        return;
+    }
+
+    if (!g_commonCycle.active) {
+        commonPauseRuntimeTick(nowMs, conveyor);
+        return;
+    }
+
+    commonPauseRuntimeTick(nowMs, conveyor);
     if (!g_commonCycle.active) {
         return;
     }
 
-    const uint32_t nowMs = millis();
-    const Rs485DeviceState &conveyor = g_rs485Devices[CONVEYOR_ID];
-    const Rs485DeviceState &manipulator = g_rs485Devices[MANIPULATOR_ID];
     const bool sealerDoneStable = commonSealerDoneStable(nowMs);
+    const bool conveyorOnline = conveyor.online && conveyor.protocolOk;
+    const bool manipulatorOnline = manipulator.online && manipulator.protocolOk;
     const bool feedSideKnown = commonFeedSideSnapshotKnown(conveyor);
     const bool feedSideEmpty = commonFeedSideEmpty(conveyor);
+    const bool outfeedReady = conveyorOnline && conveyorOutfeedReadyForBatch(conveyor);
 
     if (g_commonCycle.stage != g_commonDiagLastStage) {
         g_commonDiagLastStage = g_commonCycle.stage;
         g_commonDiagStageSinceMs = nowMs;
         g_commonDiagLastWaitLogMs = nowMs;
+#if MASTER_COMMON_TRACE_DEBUG
         Serial.print("COMMON TRACE: stage=");
         Serial.print(commonCycleStageName(g_commonCycle.stage));
         Serial.print(", pause=");
         Serial.print(commonPauseStateName(g_commonCycle.pauseState));
         Serial.print(", event=");
         Serial.println(g_commonCycle.lastEvent);
+#endif
     }
 
     if ((uint32_t)(nowMs - g_commonDiagStageSinceMs) >= COMMON_DIAG_WAIT_LOG_MS &&
         (uint32_t)(nowMs - g_commonDiagLastWaitLogMs) >= COMMON_DIAG_WAIT_LOG_MS) {
         g_commonDiagLastWaitLogMs = nowMs;
+#if MASTER_COMMON_TRACE_DEBUG
         Serial.print("COMMON TRACE: waiting stage=");
         Serial.print(commonCycleStageName(g_commonCycle.stage));
         Serial.print(", stage_ms=");
@@ -1484,11 +4093,34 @@ void processCommonCycle()
         Serial.print(", pause=");
         Serial.print(commonPauseStateName(g_commonCycle.pauseState));
         Serial.print(", conveyor_online=");
-        Serial.print(conveyor.online && conveyor.protocolOk ? "yes" : "no");
+        Serial.print(conveyorOnline ? "yes" : "no");
         Serial.print(", manip_online=");
-        Serial.print(manipulator.online && manipulator.protocolOk ? "yes" : "no");
+        Serial.print(manipulatorOnline ? "yes" : "no");
+        Serial.print(", manip_ready=");
+        Serial.print(manipulatorInWorkStartPose(manipulator) ? "yes" : "no");
+        Serial.print(", manip_q_only=");
+        Serial.print(manipulatorNeedsOnlyGripOpenForWorkStart(manipulator) ? "yes" : "no");
+        Serial.print(", manip_grip_unknown=");
+        Serial.print(manipulatorWorkStartGripUnknown(manipulator) ? "yes" : "no");
         Serial.print(", otvod_ready=");
-        Serial.print(g_otvodWorkCycle.readyForBatch ? "yes" : "no");
+        Serial.print(outfeedReady ? "yes" : "no");
+        Serial.print(", otvod_seen_not_ready=");
+        Serial.print(g_commonCycle.outfeedNotReadyObserved ? "yes" : "no");
+        Serial.print(", otvod_seq=");
+        Serial.print(conveyorOnline ? conveyorStep2CompletionSeq(conveyor) : 0);
+        Serial.print(", otvod_seq_base=");
+        Serial.print(g_commonCycle.outfeedStep2SeqBase);
+        Serial.print(", post7_mode=");
+        Serial.print(g_commonCycle.currentCycleLoadsSealer ? "LOAD" : "UNLOAD_ONLY");
+        Serial.print(", sealer_seq=");
+        Serial.print(conveyorOnline ? conveyorSealerCompletionSeq(conveyor) : 0);
+        Serial.print(", sealer_seq_base=");
+        Serial.print(g_commonCycle.post7SealerCompletionSeqBase);
+        Serial.print(", sealer_seq_advanced=");
+        Serial.print(conveyorOnline &&
+            conveyorSealerCompletionSeq(conveyor) != g_commonCycle.post7SealerCompletionSeqBase
+                ? "yes"
+                : "no");
         Serial.print(", sealer_pending_unload=");
         Serial.print(g_commonCycle.sealerDonePendingUnload ? "yes" : "no");
         Serial.print(", seal_stable=");
@@ -1497,29 +4129,80 @@ void processCommonCycle()
         Serial.print(feedSideKnown ? "yes" : "no");
         Serial.print(", feed_empty=");
         Serial.println(feedSideEmpty ? "yes" : "no");
+#endif
     }
 
     switch (g_commonCycle.stage) {
         case CommonCycleStage::WaitInitialBatch:
-            if (!conveyor.online || !conveyor.protocolOk || !manipulator.online || !manipulator.protocolOk) {
+            if (!conveyorOnline || !manipulatorOnline) {
                 return;
             }
             if (!conveyorBatchReady(conveyor)) {
                 if (g_commonCycle.pauseRequested) {
+                    if (!commonPauseRuntimeNodeReadyForFinalize()) {
+                        return;
+                    }
+                    commonPauseRuntimeMarkFinalizeStarted();
+                    const bool pauseFeedKnownEmpty =
+                        commonPauseFinalizeFeedSideKnownEmpty(feedSideKnown, feedSideEmpty);
+                    const bool pauseFeedKnown = feedSideKnown || pauseFeedKnownEmpty;
+                    const bool pauseFeedCollecting =
+                        !pauseFeedKnownEmpty && feedSideKnown && !feedSideEmpty;
+                    if (commonPauseStableContractReached()) {
+                        return;
+                    }
+                    const bool pauseStrictForwardOnly = commonPauseStrictGateForwardOnly();
+                    if (pauseStrictForwardOnly) {
+                        if (conveyorProgram1Active(conveyor) || pauseFeedCollecting) {
+                            commonLogPauseStrictRollbackBlocked();
+                        }
+                        const bool strictSnapshotBypassed =
+                            commonTryBypassPauseStrictSnapshotUnknown(conveyor, false, nowMs);
+                        if (!strictSnapshotBypassed) {
+                            return;
+                        }
+                        if (g_commonCycle.sealerDonePendingUnload && sealerDoneStable) {
+                            if (!outfeedReady) {
+                                if (g_commonCycle.lastEvent !=
+                                    "COMMON: pause waits OUT2 for mandatory unload") {
+                                    g_commonCycle.lastEvent =
+                                        "COMMON: pause waits OUT2 for mandatory unload";
+                                    g_lastCommandResult = g_commonCycle.lastEvent;
+                                    Serial.println(g_lastCommandResult);
+                                    (void)mqttPublishStatus(false);
+                                }
+                                return;
+                            }
+                            if (!startCommonManipulatorWorkCycle("pause mandatory unload", false)) {
+                                abortCommonCycle("COMMON failed: mandatory unload start");
+                            }
+                            return;
+                        }
+                        (void)commonTryEnterPauseStableWait(conveyor);
+                        return;
+                    }
                     if (conveyorProgram1Active(conveyor)) {
+                        commonResetPauseStrictSnapshotTracking();
                         g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
                         return;
                     }
-                    if (!feedSideKnown) {
-                        commonSetPauseWaitsStrictFeedSnapshot();
-                        return;
+                    bool strictSnapshotBypassed = false;
+                    if (!pauseFeedKnown) {
+                        strictSnapshotBypassed =
+                            commonTryBypassPauseStrictSnapshotUnknown(conveyor, false, nowMs);
+                        if (!strictSnapshotBypassed) {
+                            return;
+                        }
+                    } else {
+                        commonResetPauseStrictSnapshotTracking();
                     }
-                    if (!feedSideEmpty) {
+                    if (pauseFeedCollecting && !strictSnapshotBypassed) {
+                        commonResetPauseStrictSnapshotTracking();
                         g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
                         return;
                     }
                     if (g_commonCycle.sealerDonePendingUnload && sealerDoneStable) {
-                        if (!g_otvodWorkCycle.readyForBatch) {
+                        if (!outfeedReady) {
                             if (g_commonCycle.lastEvent !=
                                 "COMMON: pause waits OUT2 for mandatory unload") {
                                 g_commonCycle.lastEvent =
@@ -1535,7 +4218,7 @@ void processCommonCycle()
                         }
                         return;
                     }
-                    (void)commonTryEnterPauseStableWait(conveyor, nowMs);
+                    (void)commonTryEnterPauseStableWait(conveyor);
                     return;
                 }
                 if (!g_commonCycle.pauseRequested &&
@@ -1547,6 +4230,11 @@ void processCommonCycle()
                 return;
             }
             if (g_commonCycle.pauseRequested) {
+                if (!commonPauseRuntimeNodeReadyForFinalize()) {
+                    return;
+                }
+                commonPauseRuntimeMarkFinalizeStarted();
+                commonResetPauseStrictSnapshotTracking();
                 g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
             }
             g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
@@ -1557,14 +4245,45 @@ void processCommonCycle()
             }
             return;
 
-        case CommonCycleStage::WaitManipReady:
-            if (!manipulator.online || !manipulator.protocolOk) {
+        case CommonCycleStage::WaitManipReady: {
+            const bool manipulatorOnline = manipulator.online && manipulator.protocolOk;
+            const bool workStartReady = manipulatorInWorkStartPose(manipulator);
+            const bool needsQOnly = manipulatorNeedsOnlyGripOpenForWorkStart(manipulator);
+            const bool gripUnknown = manipulatorWorkStartGripUnknown(manipulator);
+            const uint32_t waitMs = static_cast<uint32_t>(nowMs - g_commonDiagStageSinceMs);
+
+            if (manipulatorOnline && deviceStatusAlarm(manipulator)) {
+                abortCommonCycle("COMMON failed: manipulator alarm");
+                return;
+            }
+            if (waitMs >= COMMON_WAIT_MANIP_READY_TIMEOUT_MS) {
+                String reason = "COMMON failed: WaitManipReady timeout";
+                reason += " (" + String(waitMs) + " ms)";
+                reason += ", online=" + String(manipulatorOnline ? "yes" : "no");
+                reason += ", busy=" + String(deviceStatusBusy(manipulator) ? "yes" : "no");
+                reason += ", ready=" + String(workStartReady ? "yes" : "no");
+                reason += ", q_only=" + String(needsQOnly ? "yes" : "no");
+                reason += ", grip_unknown=" + String(gripUnknown ? "yes" : "no");
+                reason += ", sensor_bits=" + String(manipulatorSensorBits(manipulator));
+                abortCommonCycle(reason);
+                return;
+            }
+            if (!manipulatorOnline) {
                 return;
             }
             if (deviceStatusBusy(manipulator)) {
                 return;
             }
-            if (!manipulatorInWorkStartPose(manipulator)) {
+            if (!workStartReady) {
+                if (gripUnknown &&
+                    g_commonCycle.lastEvent !=
+                        "COMMON: wait manip ready, grip unknown (right+zUp)") {
+                    g_commonCycle.lastEvent =
+                        "COMMON: wait manip ready, grip unknown (right+zUp)";
+                    g_lastCommandResult = g_commonCycle.lastEvent;
+                    Serial.println(g_lastCommandResult);
+                    (void)mqttPublishStatus(false);
+                }
                 return;
             }
             if (!sendCommonManipulatorWorkCycleCommand(
@@ -1573,10 +4292,23 @@ void processCommonCycle()
                 abortCommonCycle("COMMON failed: manipulator start after prepare");
             }
             return;
+        }
 
         case CommonCycleStage::WaitManipStep7:
             if (!manipulator.online || !manipulator.protocolOk) {
                 return;
+            }
+            if (deviceStatusAlarm(manipulator)) {
+                abortCommonCycle("COMMON failed: manipulator alarm");
+                return;
+            }
+            if (!g_commonCycle.step3Seen &&
+                g_commonCycle.currentCycleLoadsSealer &&
+                !g_commonCycle.pauseRequested &&
+                deviceStatusBusy(manipulator) &&
+                manipulatorStep3Ready(manipulator)) {
+                g_commonCycle.step3Seen = true;
+                commonSetEventIfChanged("COMMON: step3 seen");
             }
             if (!g_commonCycle.step3LaunchDone &&
                 g_commonCycle.currentCycleLoadsSealer &&
@@ -1599,30 +4331,89 @@ void processCommonCycle()
                         return;
                     }
                 }
-                if (!startCommonStep7Processes(conveyor, nowMs)) {
-                    abortCommonCycle("COMMON failed: parallel start after step7");
+                if (!startCommonPost7Job(conveyor, nowMs)) {
+                    abortCommonCycle("COMMON failed: POST7 start after step7");
                 }
             }
             return;
 
         case CommonCycleStage::WaitNextBatch: {
-            const bool manipulatorIdle = manipulator.online &&
-                manipulator.protocolOk &&
-                !deviceStatusBusy(manipulator);
-            const bool otvodReady = g_otvodWorkCycle.readyForBatch;
+            if (manipulatorOnline && deviceStatusAlarm(manipulator)) {
+                abortCommonCycle("COMMON failed: manipulator alarm",
+                                 CommonAbortPost7Policy::AllowDrainToSafe);
+                return;
+            }
+            if (conveyorOnline &&
+                (deviceStatusAlarm(conveyor) || conveyorPost7ManualRecoveryRequired(conveyor))) {
+                if (conveyorPost7ManualRecoveryRequired(conveyor)) {
+                    abortCommonCycle("COMMON failed: conveyor manual recovery required");
+                } else {
+                    abortCommonCycle("COMMON failed: conveyor alarm");
+                }
+                return;
+            }
+
+            const bool outfeedStep2Active = conveyorOnline && conveyorStep2Active(conveyor);
+            const bool outfeedVfdActive = conveyorOnline && conveyorVfdTimedRunActive(conveyor);
+            const uint8_t outfeedStep2Seq = conveyorOnline ? conveyorStep2CompletionSeq(conveyor) : 0U;
+            const bool outfeedStep2SeqAdvanced = conveyorOnline &&
+                outfeedStep2Seq != g_commonCycle.outfeedStep2SeqBase;
+            const uint8_t sealerSeq = conveyorOnline ? conveyorSealerCompletionSeq(conveyor) : 0U;
+            const bool sealerSeqAdvancedForPost7 = conveyorOnline &&
+                sealerSeq != g_commonCycle.post7SealerCompletionSeqBase;
+            const bool outfeedActivityObserved = !outfeedReady ||
+                outfeedStep2Active ||
+                outfeedVfdActive ||
+                outfeedStep2SeqAdvanced;
+
+            if (g_commonCycle.outfeedStartIssued &&
+                conveyorOnline &&
+                !g_commonCycle.outfeedNotReadyObserved &&
+                outfeedActivityObserved) {
+                g_commonCycle.outfeedNotReadyObserved = true;
+            }
+
+            const bool manipulatorIdle = manipulatorOnline && !deviceStatusBusy(manipulator);
+            const bool otvodReady = outfeedReady && g_commonCycle.outfeedNotReadyObserved;
+            const bool sealerDoneForJob =
+                !g_commonCycle.currentCycleLoadsSealer || sealerSeqAdvancedForPost7;
             const bool cycleSettled = g_commonCycle.parallelLaunchDone &&
                 manipulatorIdle &&
                 otvodReady &&
-                (!g_commonCycle.currentCycleLoadsSealer || commonSealerDoneForCurrentCycle(nowMs));
+                sealerDoneForJob;
 
             if (!cycleSettled) {
-                const bool otvodFailedWhileWaiting =
-                    g_commonCycle.parallelLaunchDone &&
-                    !g_otvodWorkCycle.active &&
-                    !otvodReady;
-                if (otvodFailedWhileWaiting) {
-                    abortCommonCycle("COMMON failed: " + g_otvodWorkCycle.lastEvent);
-                    return;
+                if (g_commonCycle.parallelLaunchDone && g_commonCycle.outfeedStartIssued) {
+                    const uint32_t outfeedWaitMs =
+                        static_cast<uint32_t>(nowMs - g_commonCycle.outfeedStartedMs);
+                    if (outfeedWaitMs >= COMMON_WAIT_OUTFEED_READY_TIMEOUT_MS) {
+                        String reason = "COMMON failed: POST7 wait timeout";
+                        reason += " (" + String(outfeedWaitMs) + " ms)";
+                        reason += ", online=" + String(conveyorOnline ? "yes" : "no");
+                        reason += ", post7_mode=" +
+                            String(g_commonCycle.currentCycleLoadsSealer ? "LOAD" : "UNLOAD_ONLY");
+                        reason += ", outfeed_ready=" + String(outfeedReady ? "yes" : "no");
+                        reason += ", outfeed_seen_not_ready=" +
+                            String(g_commonCycle.outfeedNotReadyObserved ? "yes" : "no");
+                        reason += ", outfeed_step2=" + String(outfeedStep2Active ? "yes" : "no");
+                        reason += ", outfeed_vfd=" + String(outfeedVfdActive ? "yes" : "no");
+                        reason += ", outfeed_seq=" + String(outfeedStep2Seq);
+                        reason += ", outfeed_seq_base=" + String(g_commonCycle.outfeedStep2SeqBase);
+                        reason += ", sealer_expected=" +
+                            String(g_commonCycle.currentCycleLoadsSealer ? "yes" : "no");
+                        reason += ", sealer_seq=" + String(sealerSeq);
+                        reason += ", sealer_seq_base=" + String(g_commonCycle.post7SealerCompletionSeqBase);
+                        reason += ", sealer_seq_advanced=" + String(sealerSeqAdvancedForPost7 ? "yes" : "no");
+                        if (!otvodReady) {
+                            reason += ", blocker=outfeed";
+                        } else if (!sealerDoneForJob) {
+                            reason += ", blocker=sealer_seq";
+                        } else {
+                            reason += ", blocker=unknown";
+                        }
+                        abortCommonCycle(reason);
+                        return;
+                    }
                 }
 
                 if (g_commonCycle.pauseRequested &&
@@ -1637,16 +4428,59 @@ void processCommonCycle()
                     Serial.println(g_lastCommandResult);
                     (void)mqttPublishStatus(false);
                 }
+                if (g_commonCycle.pauseRequested &&
+                    !feedSideKnown &&
+                    g_commonCycle.pauseState == CommonPauseState::WaitStrictFeedSnapshot) {
+                    const bool nextBatchReadyForPause =
+                        conveyorNextBatchReadyForCommon(conveyor, g_commonCycle.lastConsumedBatchSeq);
+                    (void)commonTryBypassPauseStrictSnapshotUnknown(
+                        conveyor,
+                        nextBatchReadyForPause,
+                        nowMs);
+                }
                 return;
             }
 
-            const bool feedHasBatch = conveyorBatchReady(conveyor);
+            const bool feedHasBatch = conveyorNextBatchReadyForCommon(
+                conveyor,
+                g_commonCycle.lastConsumedBatchSeq);
             const bool feedCollecting = feedSideKnown && !feedSideEmpty;
-            const bool nextBatchReady = conveyorBatchReady(conveyor) &&
-                conveyorBatchSeq(conveyor) != 0 &&
-                conveyorBatchSeq(conveyor) != g_commonCycle.lastConsumedBatchSeq;
+            const bool pauseFeedKnownEmpty =
+                commonPauseFinalizeFeedSideKnownEmpty(feedSideKnown, feedSideEmpty);
+            const bool pauseFeedKnown = feedSideKnown || pauseFeedKnownEmpty;
+            const bool pauseFeedCollecting = !pauseFeedKnownEmpty && feedCollecting;
+            const bool nextBatchReady = feedHasBatch;
 
             if (g_commonCycle.pauseRequested) {
+                if (!commonPauseRuntimeNodeReadyForFinalize()) {
+                    return;
+                }
+                commonPauseRuntimeMarkFinalizeStarted();
+                if (commonPauseStableContractReached()) {
+                    return;
+                }
+                const bool pauseStrictForwardOnly = commonPauseStrictGateForwardOnly();
+                if (pauseStrictForwardOnly) {
+                    if (feedHasBatch ||
+                        conveyorProgram1Active(conveyor) ||
+                        pauseFeedCollecting) {
+                        commonLogPauseStrictRollbackBlocked();
+                    }
+                    const bool strictSnapshotBypassed =
+                        commonTryBypassPauseStrictSnapshotUnknown(conveyor, feedHasBatch, nowMs);
+                    if (!strictSnapshotBypassed) {
+                        return;
+                    }
+                    if (g_commonCycle.sealerDonePendingUnload && sealerDoneStable) {
+                        if (!startCommonManipulatorWorkCycle("pause mandatory unload", false)) {
+                            abortCommonCycle("COMMON failed: mandatory unload start");
+                        }
+                        return;
+                    }
+
+                    (void)commonTryEnterPauseStableWait(conveyor);
+                    return;
+                }
                 if (feedHasBatch) {
                     g_commonCycle.lastConsumedBatchSeq = conveyorBatchSeq(conveyor);
                     if (!startCommonManipulatorWorkCycle("pause final block", true)) {
@@ -1656,6 +4490,7 @@ void processCommonCycle()
                 }
 
                 if (conveyorProgram1Active(conveyor)) {
+                    commonResetPauseStrictSnapshotTracking();
                     g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
                     if (g_commonCycle.lastEvent != "COMMON: pause_fill_last_block waiting batch") {
                         g_commonCycle.lastEvent = "COMMON: pause_fill_last_block waiting batch";
@@ -1666,12 +4501,19 @@ void processCommonCycle()
                     return;
                 }
 
-                if (!feedSideKnown) {
-                    commonSetPauseWaitsStrictFeedSnapshot();
-                    return;
+                bool strictSnapshotBypassed = false;
+                if (!pauseFeedKnown) {
+                    strictSnapshotBypassed =
+                        commonTryBypassPauseStrictSnapshotUnknown(conveyor, feedHasBatch, nowMs);
+                    if (!strictSnapshotBypassed) {
+                        return;
+                    }
+                } else {
+                    commonResetPauseStrictSnapshotTracking();
                 }
 
-                if (feedCollecting) {
+                if (pauseFeedCollecting && !strictSnapshotBypassed) {
+                    commonResetPauseStrictSnapshotTracking();
                     g_commonCycle.pauseState = CommonPauseState::FillLastBlock;
                     return;
                 }
@@ -1683,20 +4525,15 @@ void processCommonCycle()
                     return;
                 }
 
-                (void)commonTryEnterPauseStableWait(conveyor, nowMs);
+                (void)commonTryEnterPauseStableWait(conveyor);
                 return;
             }
 
-            if (!nextBatchReady &&
-                !conveyorProgram1Active(conveyor) &&
-                !deviceStatusBusy(conveyor)) {
-                if (!startCommonConveyorProgram1("retry fill after step7")) {
+            if (!nextBatchReady) {
+                if (!startCommonConveyorProgram1("retry after step7")) {
                     abortCommonCycle("COMMON failed: retry P1 after step7");
                     return;
                 }
-            }
-
-            if (!nextBatchReady) {
                 return;
             }
 
@@ -1968,6 +4805,7 @@ void rs485MarkDeviceOffline(Rs485DeviceState &st)
     st.extra1 = 0;
     st.extra2 = 0;
     st.extra3 = 0;
+    st.managedHeartbeatMs = 0;
     st.vfdRunHz = 0.0F;
     st.vfdFault = 0;
 }
@@ -2050,6 +4888,7 @@ void rs485ProbeManagedDevice(uint8_t id, uint16_t expectedKind, const char *orig
     st.extra1 = frame.extra1;
     st.extra2 = frame.extra2;
     st.extra3 = frame.extra3;
+    st.managedHeartbeatMs = frame.heartbeatMs;
     st.protocolOk = (frame.magic == DEVICE_MAGIC &&
                      frame.protoVer == DEVICE_PROTO_VER &&
                      frame.deviceKind == expectedKind &&
@@ -2258,10 +5097,22 @@ void rs485ScanPrintStatus()
     Serial.print(manipulator.statusWord);
     Serial.print(", error=");
     Serial.print(manipulator.errorWord);
+    Serial.print(", busy=");
+    Serial.print(deviceStatusBusy(manipulator) ? "yes" : "no");
+    Serial.print(", alarm=");
+    Serial.print(deviceStatusAlarm(manipulator) ? "yes" : "no");
     Serial.print(", mode=");
     Serial.print(manipulator.extra0);
     Serial.print(", job=");
-    Serial.println(manipulator.extra1);
+    Serial.print(manipulator.extra1);
+    Serial.print(", work_start_ready=");
+    Serial.print(manipulatorInWorkStartPose(manipulator) ? "yes" : "no");
+    Serial.print(", needs_q_only=");
+    Serial.print(manipulatorNeedsOnlyGripOpenForWorkStart(manipulator) ? "yes" : "no");
+    Serial.print(", work_start_ambiguous=");
+    Serial.print(manipulatorWorkStartGripUnknown(manipulator) ? "yes" : "no");
+    Serial.print(", sensor_bits=");
+    Serial.println(manipulatorSensorBits(manipulator));
 }
 
 bool handleConsoleLine(String line);
@@ -2647,14 +5498,28 @@ String mqttBuildStatusPayload()
     payload += ",\"completion_seq\":" + String(conveyorSealerCompletionSeq(conveyor));
     payload += ",\"pulse_ms\":" + String(g_sealStartPulseDurationMs);
     payload += "}";
+    const bool outfeedOnline = conveyor.online && conveyor.protocolOk;
+    const bool outfeedReady = outfeedOnline && conveyorOutfeedReadyForBatch(conveyor);
+    const bool outfeedStep2Active = outfeedOnline && conveyorStep2Active(conveyor);
+    const bool outfeedVfdTimedRunActive = outfeedOnline && conveyorVfdTimedRunActive(conveyor);
+    const uint8_t outfeedStep2Seq = outfeedOnline ? conveyorStep2CompletionSeq(conveyor) : 0U;
+    const bool outfeedActive = outfeedOnline &&
+        (outfeedStep2Active || outfeedVfdTimedRunActive || !outfeedReady);
     payload += ",\"otvod_cycle\":{";
-    payload += "\"active\":" + String(g_otvodWorkCycle.active ? "true" : "false");
-    payload += ",\"ready\":" + String(g_otvodWorkCycle.readyForBatch ? "true" : "false");
-    payload += ",\"step_started\":" + String(g_otvodWorkCycle.stepRunsStarted);
-    payload += ",\"step_done\":" + String(g_otvodWorkCycle.stepRunsCompleted);
-    payload += ",\"vfd_started\":" + String(g_otvodWorkCycle.vfdRunsStarted);
-    payload += ",\"vfd_done\":" + String(g_otvodWorkCycle.vfdRunsCompleted);
-    payload += ",\"last\":\"" + escapeJsonString(g_otvodWorkCycle.lastEvent) + "\"";
+    payload += "\"source\":\"conveyor_status\"";
+    payload += ",\"online\":" + String(outfeedOnline ? "true" : "false");
+    payload += ",\"active\":" + String(outfeedActive ? "true" : "false");
+    payload += ",\"ready\":" + String(outfeedReady ? "true" : "false");
+    payload += ",\"step_started\":" + String(outfeedStep2Active ? 1 : 0);
+    payload += ",\"step_done\":" + String(outfeedStep2Seq);
+    payload += ",\"vfd_started\":" + String(outfeedVfdTimedRunActive ? 1 : 0);
+    payload += ",\"vfd_done\":" + String(outfeedReady ? 1 : 0);
+    payload += ",\"step2_active\":" + String(outfeedStep2Active ? "true" : "false");
+    payload += ",\"vfd_timed_run_active\":" + String(outfeedVfdTimedRunActive ? "true" : "false");
+    payload += ",\"step2_seq\":" + String(outfeedStep2Seq);
+    payload += ",\"last\":\"" + String(outfeedOnline
+        ? (outfeedReady ? "settled" : "running_or_waiting")
+        : "offline") + "\"";
     payload += "}";
     payload += ",\"rs485_devices\":[";
     bool first = true;
@@ -2696,6 +5561,12 @@ String mqttBuildStatusPayload()
     payload += ",\"program_state\":" + String(conveyorProgramStateCode(conveyor));
     payload += ",\"program_pass\":" + String(conveyorProgramPass(conveyor));
     payload += ",\"batch_ready\":" + String(conveyorBatchReady(conveyor) ? "true" : "false");
+    payload += ",\"batch_ready_next_for_common\":" +
+        String(conveyorNextBatchReadyForCommon(conveyor, g_commonCycle.lastConsumedBatchSeq) ? "true" : "false");
+    payload += ",\"batch_ready_stale_for_common\":" +
+        String(conveyorReadyBatchIsStaleForCommon(conveyor, g_commonCycle.lastConsumedBatchSeq) ? "true" : "false");
+    payload += ",\"outfeed_ready_for_batch\":" +
+        String((conveyor.online && conveyor.protocolOk && conveyorOutfeedReadyForBatch(conveyor)) ? "true" : "false");
     payload += ",\"batch_seq\":" + String(conveyorBatchSeq(conveyor));
     payload += ",\"feed_side_empty_strict\":" + String(conveyorFeedSideEmptyStrict(conveyor) ? "true" : "false");
     payload += ",\"feed_side_empty_valid\":" + String(conveyorFeedSideEmptyValid(conveyor) ? "true" : "false");
@@ -2707,8 +5578,15 @@ String mqttBuildStatusPayload()
     payload += ",\"kind_ok\":" + String(manipulator.protocolOk ? "true" : "false");
     payload += ",\"status_word\":" + String(manipulator.statusWord);
     payload += ",\"error_word\":" + String(manipulator.errorWord);
+    payload += ",\"busy\":" + String(deviceStatusBusy(manipulator) ? "true" : "false");
+    payload += ",\"alarm\":" + String(deviceStatusAlarm(manipulator) ? "true" : "false");
     payload += ",\"mode\":" + String(manipulator.extra0);
     payload += ",\"job\":" + String(manipulator.extra1);
+    payload += ",\"work_start_ready\":" + String(manipulatorInWorkStartPose(manipulator) ? "true" : "false");
+    payload += ",\"needs_grip_open_only\":" +
+        String(manipulatorNeedsOnlyGripOpenForWorkStart(manipulator) ? "true" : "false");
+    payload += ",\"work_start_ambiguous\":" +
+        String(manipulatorWorkStartGripUnknown(manipulator) ? "true" : "false");
     payload += ",\"sensor_bits\":" + String(manipulatorSensorBits(manipulator));
     payload += ",\"conflict_bits\":" + String(manipulatorConflictBits(manipulator));
     payload += ",\"work_step\":" + String(manipulatorWorkStep(manipulator));
@@ -2718,13 +5596,153 @@ String mqttBuildStatusPayload()
     payload += "}";
     payload += ",\"common_cycle\":{";
     payload += "\"active\":" + String(g_commonCycle.active ? "true" : "false");
+    payload += ",\"coarse_state\":\"" + String(commonCoarseStateName()) + "\"";
+    payload += ",\"runtime_state\":\"" + String(commonRuntimeStateName(g_commonCycle.runtimeState)) + "\"";
+    payload += ",\"manual_recovery_required\":" +
+        String(commonManualRecoveryRequired() ? "true" : "false");
+    payload += ",\"drain_supervision_active\":" + String(g_commonCycle.abortDrainActive ? "true" : "false");
+    payload += ",\"drain_tail_outcome\":\"" + String(commonAbortDrainOutcomeName(g_commonCycle.abortDrainOutcome)) + "\"";
+    payload += ",\"drain_elapsed_ms\":" +
+        String(g_commonCycle.abortDrainActive
+            ? static_cast<uint32_t>(millis() - g_commonCycle.abortDrainStartedMs)
+            : 0U);
+    payload += ",\"drain_no_progress_ms\":" +
+        String(g_commonCycle.abortDrainActive
+            ? static_cast<uint32_t>(millis() - g_commonCycle.abortDrainLastProgressMs)
+            : 0U);
+    payload += ",\"abort_reason\":\"" + escapeJsonString(g_commonCycle.abortReason) + "\"";
     payload += ",\"pause\":" + String(g_commonCycle.pauseRequested ? "true" : "false");
-    payload += ",\"pause_state\":\"" + String(commonPauseStateName(g_commonCycle.pauseState)) + "\"";
+    payload += ",\"pause_state\":\"" + String(commonPauseRuntimeStateName(g_pauseRuntime.state)) + "\"";
+    payload += ",\"pause_legacy_state\":\"" + String(commonPauseStateName(g_commonCycle.pauseState)) + "\"";
+    payload += ",\"cycle_id\":" + String(g_commonCycle.cycleId);
+    payload += ",\"pause_runtime_state\":\"" + String(commonPauseRuntimeStateName(g_pauseRuntime.state)) + "\"";
+    payload += ",\"pause_epoch\":" + String(g_pauseRuntime.currentEpoch);
+    payload += ",\"pause_cycle_id\":" + String(g_pauseRuntime.pauseCycleId);
+    const bool pauseMandatoryUnloadInFlight =
+        commonPauseRuntimeMandatoryUnloadInFlight(conveyor, manipulator);
+    const bool pauseMandatoryUnloadPolicyActive =
+        commonPauseRuntimeMandatoryUnloadPolicyActive();
+    const bool pauseForceDrainStableWaitPolicyActive =
+        commonPauseRuntimeForceDrainStableWaitPolicyActive();
+    const uint32_t pauseMandatoryUnloadElapsedMs =
+        commonPauseRuntimeMandatoryUnloadElapsedMs(millis());
+    const char *pauseWatchdogProfile = commonPauseRuntimeWatchdogProfileName(
+        pauseMandatoryUnloadPolicyActive);
+    const char *pauseWatchdogPolicyReason = commonPauseRuntimeWatchdogPolicyReason(
+        pauseMandatoryUnloadPolicyActive,
+        pauseMandatoryUnloadInFlight);
+    payload += ",\"pause_can_release\":" + String(commonPauseRuntimeCanRelease() ? "true" : "false");
+    payload += ",\"pause_arming_elapsed_ms\":" + String(commonPauseRuntimeArmingElapsedMs(millis()));
+    payload += ",\"pause_no_progress_ms\":" + String(commonPauseRuntimeNoProgressMs(millis()));
+    payload += ",\"pause_arming_timeout_limit_ms\":" + String(
+        pauseMandatoryUnloadPolicyActive
+            ? COMMON_PAUSE_MANDATORY_UNLOAD_TIMEOUT_MS
+            : COMMON_PAUSE_ARMING_TIMEOUT_MS);
+    payload += ",\"pause_watchdog_active\":" +
+        String(commonPauseRuntimeWatchdogActive() ? "true" : "false");
+    payload += ",\"pause_watchdog_profile\":\"" +
+        String(pauseWatchdogProfile) + "\"";
+    payload += ",\"pause_substate\":\"" +
+        String(commonPauseRuntimeSubstateName(conveyor, manipulator)) + "\"";
+    payload += ",\"pause_watchdog_policy_reason\":\"" +
+        String(pauseWatchdogPolicyReason) + "\"";
+    payload += ",\"pause_force_drain_stable_wait_policy\":" +
+        String(pauseForceDrainStableWaitPolicyActive ? "true" : "false");
+    payload += ",\"pause_no_progress_guard\":\"" +
+        String(pauseMandatoryUnloadPolicyActive ? "hold" : "normal") + "\"";
+    payload += ",\"pause_mandatory_unload_active\":" +
+        String(g_pauseRuntime.mandatoryUnloadActive ? "true" : "false");
+    payload += ",\"pause_mandatory_unload_in_flight\":" +
+        String(pauseMandatoryUnloadInFlight ? "true" : "false");
+    payload += ",\"pause_mandatory_unload_elapsed_ms\":" +
+        String(pauseMandatoryUnloadElapsedMs);
+    payload += ",\"pause_progress_observed\":" + String(g_pauseRuntime.progressObserved ? "true" : "false");
+    payload += ",\"buffer_count\":" + String(g_pauseRuntime.conveyorSnapshot.bufferCount);
+    payload += ",\"buffer_count_valid\":" + String(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "true" : "false");
+    payload += ",\"buffer_count_source\":\"" +
+        String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource)) + "\"";
+    payload += ",\"sealer_count\":" + String(g_pauseRuntime.conveyorSnapshot.sealerCount);
+    payload += ",\"sealer_count_valid\":" + String(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "true" : "false");
+    payload += ",\"sealer_count_source\":\"" +
+        String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource)) + "\"";
+    payload += ",\"sealer_residual_known\":" + String(g_pauseRuntime.conveyorSnapshot.sealerResidualKnown ? "true" : "false");
+    payload += ",\"buffer_count_fresh\":" + String(g_pauseRuntime.conveyorSnapshot.bufferCountFresh ? "true" : "false");
+    payload += ",\"sealer_count_fresh\":" + String(g_pauseRuntime.conveyorSnapshot.sealerCountFresh ? "true" : "false");
+    payload += ",\"pause_node_epoch_confirmed\":" +
+        String(g_pauseRuntime.conveyorSnapshot.nodePauseEpochConfirmed ? "true" : "false");
+    payload += ",\"pause_contract_trusted\":" +
+        String(g_pauseRuntime.conveyorSnapshot.contractSnapshotTrusted ? "true" : "false");
+    payload += ",\"pause_node_state\":\"" +
+        String(commonPauseNodeStateName(g_pauseRuntime.conveyorSnapshot.nodeState)) + "\"";
+    payload += ",\"pause_node_state_fresh\":" +
+        String(g_pauseRuntime.conveyorSnapshot.nodeStateFresh ? "true" : "false");
+    payload += ",\"pause_node_ready_confirmed\":" +
+        String(g_pauseRuntime.nodeReadyConfirmed ? "true" : "false");
+    payload += ",\"pause_finalize_started\":" +
+        String(g_pauseRuntime.finalizeStarted ? "true" : "false");
+    const bool pauseFillLastBlockBlocked =
+        g_pauseRuntime.fillLastBlockBlockedSinceMs != 0;
+    payload += ",\"pause_fill_last_block_blocked\":" +
+        String(pauseFillLastBlockBlocked ? "true" : "false");
+    payload += ",\"pause_fill_last_block_blocked_ms\":" +
+        String(
+            pauseFillLastBlockBlocked
+                ? static_cast<uint32_t>(millis() - g_pauseRuntime.fillLastBlockBlockedSinceMs)
+                : 0U);
     payload += ",\"stage\":\"" + String(commonCycleStageName(g_commonCycle.stage)) + "\"";
     payload += ",\"manip_starts\":" + String(g_commonCycle.manipStarts);
     payload += ",\"parallel_starts\":" + String(g_commonCycle.parallelStarts);
+    payload += ",\"step3_seen\":" + String(g_commonCycle.step3Seen ? "true" : "false");
+    payload += ",\"step3_refill_done\":" + String(g_commonCycle.step3LaunchDone ? "true" : "false");
+    payload += ",\"refill_pending\":" + String(g_commonCycle.refillStartPending ? "true" : "false");
+    payload += ",\"refill_pending_ms\":" +
+        String((g_commonCycle.refillStartPending && g_commonCycle.refillStartRequestedMs != 0)
+            ? static_cast<uint32_t>(millis() - g_commonCycle.refillStartRequestedMs)
+            : 0U);
     payload += ",\"batch_seq\":" + String(g_commonCycle.lastConsumedBatchSeq);
+    payload += ",\"next_batch_ready\":" +
+        String(conveyorNextBatchReadyForCommon(conveyor, g_commonCycle.lastConsumedBatchSeq) ? "true" : "false");
+    payload += ",\"ready_batch_stale\":" +
+        String(conveyorReadyBatchIsStaleForCommon(conveyor, g_commonCycle.lastConsumedBatchSeq) ? "true" : "false");
+    payload += ",\"outfeed_ready\":" +
+        String((conveyor.online && conveyor.protocolOk && conveyorOutfeedReadyForBatch(conveyor)) ? "true" : "false");
+    payload += ",\"outfeed_seen_not_ready\":" +
+        String(g_commonCycle.outfeedNotReadyObserved ? "true" : "false");
     payload += ",\"sealer_done_pending_unload\":" + String(g_commonCycle.sealerDonePendingUnload ? "true" : "false");
+    payload += ",\"pause_nodes\":{";
+    payload += "\"conveyor\":{";
+    payload += "\"pause_state\":\"" + String(commonPauseRuntimeStateName(g_pauseRuntime.conveyorSnapshot.pauseState)) + "\"";
+    payload += ",\"node_state\":\"" +
+        String(commonPauseNodeStateName(g_pauseRuntime.conveyorSnapshot.nodeState)) + "\"";
+    payload += ",\"pause_epoch\":" + String(g_pauseRuntime.conveyorSnapshot.pauseEpoch);
+    payload += ",\"buffer_count\":" + String(g_pauseRuntime.conveyorSnapshot.bufferCount);
+    payload += ",\"buffer_count_valid\":" + String(g_pauseRuntime.conveyorSnapshot.bufferCountValid ? "true" : "false");
+    payload += ",\"buffer_count_source\":\"" +
+        String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.bufferCountSource)) + "\"";
+    payload += ",\"sealer_count\":" + String(g_pauseRuntime.conveyorSnapshot.sealerCount);
+    payload += ",\"sealer_count_valid\":" + String(g_pauseRuntime.conveyorSnapshot.sealerCountValid ? "true" : "false");
+    payload += ",\"sealer_count_source\":\"" +
+        String(pauseCountSourceName(g_pauseRuntime.conveyorSnapshot.sealerCountSource)) + "\"";
+    payload += ",\"node_state_fresh\":" +
+        String(g_pauseRuntime.conveyorSnapshot.nodeStateFresh ? "true" : "false");
+    payload += ",\"manual_recovery_required\":" +
+        String(g_pauseRuntime.conveyorSnapshot.manualRecoveryRequired ? "true" : "false");
+    payload += "},";
+    payload += "\"manipulator\":{";
+    payload += "\"pause_state\":\"" + String(commonPauseRuntimeStateName(g_pauseRuntime.manipulatorSnapshot.pauseState)) + "\"";
+    payload += ",\"pause_epoch\":" + String(g_pauseRuntime.manipulatorSnapshot.pauseEpoch);
+    payload += ",\"buffer_count\":" + String(g_pauseRuntime.manipulatorSnapshot.bufferCount);
+    payload += ",\"buffer_count_valid\":" + String(g_pauseRuntime.manipulatorSnapshot.bufferCountValid ? "true" : "false");
+    payload += ",\"buffer_count_source\":\"" +
+        String(pauseCountSourceName(g_pauseRuntime.manipulatorSnapshot.bufferCountSource)) + "\"";
+    payload += ",\"sealer_count\":" + String(g_pauseRuntime.manipulatorSnapshot.sealerCount);
+    payload += ",\"sealer_count_valid\":" + String(g_pauseRuntime.manipulatorSnapshot.sealerCountValid ? "true" : "false");
+    payload += ",\"sealer_count_source\":\"" +
+        String(pauseCountSourceName(g_pauseRuntime.manipulatorSnapshot.sealerCountSource)) + "\"";
+    payload += ",\"manual_recovery_required\":" +
+        String(g_pauseRuntime.manipulatorSnapshot.manualRecoveryRequired ? "true" : "false");
+    payload += "}";
+    payload += "}";
     payload += ",\"last\":\"" + escapeJsonString(g_commonCycle.lastEvent) + "\"";
     payload += "}";
     payload += ",\"cmd_seq\":" + String(g_mqttCmdSeq);
@@ -3094,6 +6112,8 @@ void printState()
     Serial.print(conveyorMotionState(conveyor));
     Serial.print(", vfd_timed_run=");
     Serial.print(conveyorVfdTimedRunActive(conveyor) ? "yes" : "no");
+    Serial.print(", outfeed_ready=");
+    Serial.print(conveyor.protocolOk && conveyorOutfeedReadyForBatch(conveyor) ? "yes" : "no");
     Serial.print(", vfd_tick_ms=");
     Serial.println(conveyorVfdTickDurationMs(conveyor));
 
@@ -3105,10 +6125,22 @@ void printState()
     Serial.print(manipulator.statusWord);
     Serial.print(", error=");
     Serial.print(manipulator.errorWord);
+    Serial.print(", busy=");
+    Serial.print(deviceStatusBusy(manipulator) ? "yes" : "no");
+    Serial.print(", alarm=");
+    Serial.print(deviceStatusAlarm(manipulator) ? "yes" : "no");
     Serial.print(", mode=");
     Serial.print(manipulator.extra0);
     Serial.print(", job=");
-    Serial.println(manipulator.extra1);
+    Serial.print(manipulator.extra1);
+    Serial.print(", work_start_ready=");
+    Serial.print(manipulatorInWorkStartPose(manipulator) ? "yes" : "no");
+    Serial.print(", needs_q_only=");
+    Serial.print(manipulatorNeedsOnlyGripOpenForWorkStart(manipulator) ? "yes" : "no");
+    Serial.print(", work_start_ambiguous=");
+    Serial.print(manipulatorWorkStartGripUnknown(manipulator) ? "yes" : "no");
+    Serial.print(", sensor_bits=");
+    Serial.println(manipulatorSensorBits(manipulator));
 
     printSealStatus();
 
@@ -4001,9 +7033,12 @@ void handleCommandCommonCycle(String args)
 
     if (sub.isEmpty() || sub == "H" || sub == "HELP") {
         Serial.println("COMMON commands:");
-        Serial.println("  COMMON START   - start common production cycle / resume after pause");
-        Serial.println("  COMMON PAUSE   - soft pause, no new manipulator cycle will start");
-        Serial.println("  COMMON STATUS  - print common cycle state");
+        Serial.println("  COMMON START            - start new common production cycle");
+        Serial.println("  COMMON PAUSE            - enter pause arming");
+        Serial.println("  COMMON PAUSE STATUS     - print pause runtime state");
+        Serial.println("  COMMON PAUSE RELEASE    - release pause hold/empty; old cycle is not resumed");
+        Serial.println("  COMMON RECOVERY CLEAR - clear master manual recovery latch");
+        Serial.println("  COMMON STATUS           - print common cycle state");
         return;
     }
 
@@ -4019,7 +7054,35 @@ void handleCommandCommonCycle(String args)
     }
 
     if (sub == "PAUSE") {
-        requestCommonCyclePause();
+        String action = nextToken(args);
+        action.toUpperCase();
+        if (action.isEmpty()) {
+            requestCommonCyclePause();
+            return;
+        }
+        if (action == "STATUS" || action == "STATE") {
+            printCommonCycleStatus();
+            g_lastCommandResult = "COMMON PAUSE status printed";
+            return;
+        }
+        if (action == "RELEASE") {
+            (void)releaseCommonCyclePause();
+            return;
+        }
+        Serial.println("Usage: COMMON PAUSE [STATUS|RELEASE]");
+        g_lastCommandResult = "COMMON PAUSE failed: unknown subcommand";
+        return;
+    }
+
+    if (sub == "RECOVERY") {
+        String action = nextToken(args);
+        action.toUpperCase();
+        if (action == "CLEAR") {
+            (void)clearCommonRecoveryState();
+            return;
+        }
+        Serial.println("Usage: COMMON RECOVERY CLEAR");
+        g_lastCommandResult = "COMMON RECOVERY failed: unknown subcommand";
         return;
     }
 

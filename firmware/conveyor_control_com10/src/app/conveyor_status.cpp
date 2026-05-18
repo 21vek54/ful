@@ -12,9 +12,11 @@ constexpr uint16_t STATUS_CALIBRATED_BIT = 1U << 4;
 constexpr uint16_t STATUS_PROGRAM1_ACTIVE_BIT = 1U << 5;
 constexpr uint16_t STATUS_BATCH_READY_BIT = 1U << 6;
 constexpr uint16_t STATUS_STEP2_ACTIVE_BIT = 1U << 7;
+constexpr uint16_t STATUS_OUTFEED_READY_FOR_BATCH_BIT = 1U << 15;
 
 constexpr uint16_t ERROR_SENSOR_CONFLICT_BIT = 1U << 0;
 constexpr uint16_t ERROR_NOT_CALIBRATED_BIT = 1U << 1;
+constexpr uint16_t ERROR_POST7_MANUAL_RECOVERY_REQUIRED_BIT = 1U << 2;
 
 constexpr uint16_t FLAG_STATE_DOWN = 1U;
 constexpr uint16_t FLAG_STATE_UP = 2U;
@@ -61,15 +63,19 @@ ConveyorStatusSnapshot buildConveyorStatusSnapshot(const ConveyorStatusInputs &i
 
     const bool busy = isConveyorBusy(inputs);
     const bool conflict = inputs.sensorConflict;
+    const bool alarm =
+        conflict ||
+        inputs.post7ManualRecoveryRequired ||
+        inputs.program1AbortRecoveryRequired;
 
-    if (!conflict) {
+    if (!alarm) {
         snapshot.statusWord |= STATUS_READY_BIT;
         snapshot.statusWord |= STATUS_SAFE_BIT;
     }
     if (busy) {
         snapshot.statusWord |= STATUS_BUSY_BIT;
     }
-    if (conflict) {
+    if (alarm) {
         snapshot.statusWord |= STATUS_ALARM_BIT;
     }
     if (inputs.infeed.shiftCalibrated) {
@@ -84,13 +90,19 @@ ConveyorStatusSnapshot buildConveyorStatusSnapshot(const ConveyorStatusInputs &i
     if (inputs.outfeed.step2Active) {
         snapshot.statusWord |= STATUS_STEP2_ACTIVE_BIT;
     }
-    snapshot.statusWord |= static_cast<uint16_t>(inputs.outfeed.step2CompletionSeq) << 8;
+    snapshot.statusWord |= static_cast<uint16_t>(inputs.outfeed.step2CompletionSeq & 0x7FU) << 8;
+    if (inputs.outfeed.readyForBatch) {
+        snapshot.statusWord |= STATUS_OUTFEED_READY_FOR_BATCH_BIT;
+    }
 
     if (conflict) {
         snapshot.errorWord |= ERROR_SENSOR_CONFLICT_BIT;
     }
     if (!inputs.infeed.shiftCalibrated) {
         snapshot.errorWord |= ERROR_NOT_CALIBRATED_BIT;
+    }
+    if (inputs.post7ManualRecoveryRequired) {
+        snapshot.errorWord |= ERROR_POST7_MANUAL_RECOVERY_REQUIRED_BIT;
     }
 
     const uint16_t flagState = inputs.flagUp ? FLAG_STATE_UP : FLAG_STATE_DOWN;

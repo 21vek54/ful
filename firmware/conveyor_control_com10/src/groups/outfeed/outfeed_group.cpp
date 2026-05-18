@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include "app/runtime_log.h"
 #include "core/pins.h"
 
 namespace groups::outfeed {
@@ -177,7 +178,9 @@ bool startOtvodCycleStep(uint8_t cycleIndex, uint32_t nowMs)
     g_outfeedRuntime.otvodCycle.readyForBatch = false;
     g_outfeedRuntime.otvodCycle.lastEvent =
         "OTCYCLE: двухручейковый старт " + String(cycleIndex) + "/" + String(g_outfeedRuntime.otvodCycle.totalCycles);
-    Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+    if (app::runtime_log::isDebugEnabled()) {
+        Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+    }
     return true;
 }
 
@@ -208,7 +211,9 @@ bool startOtvodCycleMainTick(uint8_t cycleIndex, uint32_t nowMs)
     g_outfeedRuntime.otvodCycle.phase = OtvodCyclePhase::MainRunning;
     g_outfeedRuntime.otvodCycle.lastEvent =
         "OTCYCLE: основной отвод старт " + String(cycleIndex) + "/" + String(g_outfeedRuntime.otvodCycle.totalCycles);
-    Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+    if (app::runtime_log::isDebugEnabled()) {
+        Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+    }
     return true;
 }
 
@@ -241,14 +246,18 @@ void processOtvodCycle()
             g_outfeedRuntime.otvodCycle.readyForBatch =
                 g_outfeedRuntime.otvodCycle.stepRunsCompleted >= g_outfeedRuntime.otvodCycle.totalCycles;
 
-            Serial.print("OTCYCLE: двухручейковый завершен ");
-            Serial.print(g_outfeedRuntime.otvodCycle.stepRunsCompleted);
-            Serial.print("/");
-            Serial.println(g_outfeedRuntime.otvodCycle.totalCycles);
+            if (app::runtime_log::isDebugEnabled()) {
+                Serial.print("OTCYCLE: двухручейковый завершен ");
+                Serial.print(g_outfeedRuntime.otvodCycle.stepRunsCompleted);
+                Serial.print("/");
+                Serial.println(g_outfeedRuntime.otvodCycle.totalCycles);
+            }
 
             if (g_outfeedRuntime.otvodCycle.readyForBatch) {
                 g_outfeedRuntime.otvodCycle.lastEvent = "OTCYCLE: двухручейковый готов принять новую партию.";
-                Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+                if (app::runtime_log::isDebugEnabled()) {
+                    Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+                }
             } else {
                 g_outfeedRuntime.otvodCycle.lastEvent = "OTCYCLE: ожидание старта основного отвода.";
             }
@@ -282,7 +291,9 @@ void processOtvodCycle()
             g_outfeedRuntime.otvodCycle.phase = OtvodCyclePhase::WaitNextStep;
             g_outfeedRuntime.otvodCycle.lastEvent = "OTCYCLE: основной отвод завершен " +
                 String(g_outfeedRuntime.otvodCycle.vfdRunsCompleted) + "/" + String(g_outfeedRuntime.otvodCycle.totalCycles);
-            Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+            if (app::runtime_log::isDebugEnabled()) {
+                Serial.println(g_outfeedRuntime.otvodCycle.lastEvent);
+            }
             return;
         }
 
@@ -365,7 +376,9 @@ void processOutfeedGroup()
                 g_outfeedRuntime.step2CompletionSeq =
                     static_cast<uint8_t>(g_outfeedRuntime.step2CompletionSeq + 1U);
                 stopStep2Motion();
-                Serial.println("STEP2: движение завершено.");
+                if (!g_outfeedRuntime.otvodCycle.active || app::runtime_log::isDebugEnabled()) {
+                    Serial.println("STEP2: движение завершено.");
+                }
             }
         }
     }
@@ -395,6 +408,13 @@ OutfeedStatus readOutfeedStatus()
     status.vfdRelayActive = g_outfeedRuntime.relayOutputActive;
     status.vfdTimedRunActive = g_outfeedRuntime.timedRun.active;
     status.localCycleActive = g_outfeedRuntime.otvodCycle.active;
+    const bool outfeedSettledForCommon =
+        !status.step2Active &&
+        !status.vfdTimedRunActive &&
+        !status.vfdRelayActive &&
+        !status.localCycleActive &&
+        g_outfeedRuntime.otvodCycle.readyForBatch;
+    status.readyForBatch = outfeedSettledForCommon;
     status.vfdTickDurationMs = g_outfeedRuntime.vfdTickDurationMs;
     if (status.localCycleActive) {
         status.runState = OutfeedRunState::LocalCycleRunning;
@@ -429,13 +449,15 @@ void stopVfdTimedRun(const char *reason)
     }
 
     writeRelayOutputRaw(false);
-    Serial.print("VFD: реле GPIO21 выключено");
-    if (reason != nullptr && reason[0] != '\0') {
-        Serial.print(" (");
-        Serial.print(reason);
-        Serial.print(")");
+    if (!g_outfeedRuntime.otvodCycle.active || app::runtime_log::isDebugEnabled()) {
+        Serial.print("VFD: реле GPIO21 выключено");
+        if (reason != nullptr && reason[0] != '\0') {
+            Serial.print(" (");
+            Serial.print(reason);
+            Serial.print(")");
+        }
+        Serial.println(".");
     }
-    Serial.println(".");
     g_outfeedRuntime.timedRun = TimedRelayRunState{};
 }
 
@@ -450,9 +472,11 @@ void startVfdTimedRun(uint32_t durationMs)
     g_outfeedRuntime.timedRun.startedMs = millis();
     g_outfeedRuntime.timedRun.durationMs = durationMs;
 
-    Serial.print("VFD: реле GPIO21 включено на ");
-    Serial.print(durationMs / 1000U);
-    Serial.println(" сек.");
+    if (!g_outfeedRuntime.otvodCycle.active || app::runtime_log::isDebugEnabled()) {
+        Serial.print("VFD: реле GPIO21 включено на ");
+        Serial.print(durationMs / 1000U);
+        Serial.println(" сек.");
+    }
 }
 
 bool isVfdTimedRunActive()
@@ -502,11 +526,13 @@ void startStep2Motion(uint32_t steps, uint32_t delayUs)
     g_outfeedRuntime.step2DelayUs = delayUs;
     g_outfeedRuntime.step2LastPulseStartUs = micros();
 
-    Serial.print("STEP2: запуск, GPIO19, шагов=");
-    Serial.print(steps);
-    Serial.print(", задержка=");
-    Serial.print(delayUs);
-    Serial.println(" мкс.");
+    if (!g_outfeedRuntime.otvodCycle.active || app::runtime_log::isDebugEnabled()) {
+        Serial.print("STEP2: запуск, GPIO19, шагов=");
+        Serial.print(steps);
+        Serial.print(", задержка=");
+        Serial.print(delayUs);
+        Serial.println(" мкс.");
+    }
 }
 
 void startStep2ContinuousMotion(uint32_t delayUs)
@@ -544,7 +570,7 @@ uint8_t getStep2CompletionSeq()
     return g_outfeedRuntime.step2CompletionSeq;
 }
 
-bool startOtvodCycle(uint8_t totalCycles, uint32_t stepSteps, bool conveyorBusy)
+bool startOtvodCycle(uint8_t totalCycles, uint32_t stepSteps)
 {
     if (g_outfeedRuntime.otvodCycle.active) {
         Serial.println("OTCYCLE: уже выполняется.");
@@ -556,11 +582,6 @@ bool startOtvodCycle(uint8_t totalCycles, uint32_t stepSteps, bool conveyorBusy)
         return false;
     }
 
-    if (conveyorBusy) {
-        Serial.println("OTCYCLE: конвейер занят, сначала остановите текущий процесс.");
-        return false;
-    }
-
     g_outfeedRuntime.otvodCycle = OtvodCycleState{};
     g_outfeedRuntime.otvodCycle.active = true;
     g_outfeedRuntime.otvodCycle.readyForBatch = false;
@@ -569,12 +590,14 @@ bool startOtvodCycle(uint8_t totalCycles, uint32_t stepSteps, bool conveyorBusy)
     g_outfeedRuntime.otvodCycle.vfdDoneDelayMs = getVfdTickDurationMs();
     g_outfeedRuntime.otvodCycle.lastEvent = "OTCYCLE init";
 
-    Serial.print("OTCYCLE: init step=");
-    Serial.print(stepSteps);
-    Serial.print(", tick=");
-    Serial.print(getVfdTickDurationMs());
-    Serial.print(" ms, cycles=");
-    Serial.println(totalCycles);
+    if (app::runtime_log::isDebugEnabled()) {
+        Serial.print("OTCYCLE: init step=");
+        Serial.print(stepSteps);
+        Serial.print(", tick=");
+        Serial.print(getVfdTickDurationMs());
+        Serial.print(" ms, cycles=");
+        Serial.println(totalCycles);
+    }
 
     const uint32_t nowMs = millis();
     if (!startOtvodCycleStep(1U, nowMs)) {

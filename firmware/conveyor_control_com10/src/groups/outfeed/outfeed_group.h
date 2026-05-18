@@ -25,6 +25,8 @@ struct OutfeedStatus {
     bool vfdRelayActive = false;
     bool vfdTimedRunActive = false;
     bool localCycleActive = false;
+    // production-ready: true только когда outfeed полностью settled для COMMON.
+    bool readyForBatch = true;
     bool ready = false;
     bool busy = false;
     bool alarm = false;
@@ -59,7 +61,7 @@ bool isStep2Active();
 uint8_t getStep2CompletionSeq();
 
 // Управление локальным циклом отвода (OTCYCLE).
-bool startOtvodCycle(uint8_t totalCycles, uint32_t stepSteps, bool conveyorBusy);
+bool startOtvodCycle(uint8_t totalCycles, uint32_t stepSteps);
 void abortOtvodCycle(const String &reason, bool stopOutputs);
 bool isOtvodCycleActive();
 void printOtvodCycleStatus();

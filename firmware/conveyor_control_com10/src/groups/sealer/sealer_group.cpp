@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 
+#include "app/runtime_log.h"
 #include "core/pins.h"
 
 namespace groups::sealer {
@@ -23,6 +24,7 @@ constexpr uint32_t SEAL_DONE_EMU_DELAY_MS_MAX = 600000U;
 constexpr uint32_t SEAL_DONE_EMU_HOLD_MS_DEFAULT = 150U;
 constexpr uint32_t SEAL_DONE_EMU_HOLD_MS_MIN = 10U;
 constexpr uint32_t SEAL_DONE_EMU_HOLD_MS_MAX = 5000U;
+constexpr uint32_t SEAL_AUTO_EMU_BLOCK_LOG_PERIOD_MS = 3000U;
 
 struct SealIoState {
     bool startPulseActive = false;
@@ -33,6 +35,7 @@ struct SealIoState {
     bool doneEffectiveLastActive = false;
     bool doneSyntheticPending = false;
     bool doneSyntheticHoldActive = false;
+    bool doneSyntheticAutoEnabled = false;
     bool lastCompletionSynthetic = false;
     uint8_t completionSeq = 0;
     uint32_t startPulseStartedMs = 0;
@@ -56,6 +59,9 @@ struct SealIoState {
     uint32_t doneSyntheticHoldStartedMs = 0;
     uint32_t doneSyntheticDelayMs = 0;
     uint32_t doneSyntheticHoldMs = 0;
+    uint32_t doneSyntheticAutoDelayMs = SEAL_DONE_EMU_DELAY_MS_DEFAULT;
+    uint32_t doneSyntheticAutoHoldMs = SEAL_DONE_EMU_HOLD_MS_DEFAULT;
+    uint32_t autoEmuBlockedLastLogMs = 0;
 };
 
 SealIoState g_sealIo;
@@ -147,6 +153,10 @@ SealerWaitDoneBlockReason currentWaitDoneBlockReason(bool doneEffectiveActive)
 
 void printWaitDoneHeartbeat(uint32_t nowMs, bool doneRawActive, bool doneEffectiveActive)
 {
+    if (!app::runtime_log::isDebugEnabled()) {
+        return;
+    }
+
     const SealerWaitDoneBlockReason reason = currentWaitDoneBlockReason(doneEffectiveActive);
     Serial.print("SEAL WAIT_DONE: age_ms=");
     Serial.print(elapsedMs(nowMs, g_sealIo.waitDoneEnteredMs));
@@ -190,6 +200,41 @@ void cancelDoneEmulationInternal(const char *reason)
     Serial.println(reason);
 }
 
+bool armDoneEmulationInternal(uint32_t delayMs, uint32_t holdMs, const char *sourceTag)
+{
+    if (!g_sealIo.waitingDone || g_sealIo.startPulseActive) {
+        return false;
+    }
+    if (g_sealIo.doneSyntheticPending || g_sealIo.doneSyntheticHoldActive) {
+        return false;
+    }
+    if (isDoneActiveRaw()) {
+        return false;
+    }
+    if (delayMs > SEAL_DONE_EMU_DELAY_MS_MAX) {
+        return false;
+    }
+    if (holdMs < SEAL_DONE_EMU_HOLD_MS_MIN || holdMs > SEAL_DONE_EMU_HOLD_MS_MAX) {
+        return false;
+    }
+
+    g_sealIo.doneSyntheticPending = true;
+    g_sealIo.doneSyntheticHoldActive = false;
+    g_sealIo.doneSyntheticArmedAtMs = millis();
+    g_sealIo.doneSyntheticHoldStartedMs = 0;
+    g_sealIo.doneSyntheticDelayMs = delayMs;
+    g_sealIo.doneSyntheticHoldMs = holdMs;
+
+    Serial.print("SEAL EMU: ");
+    Serial.print((sourceTag != nullptr && sourceTag[0] != '\0') ? sourceTag : "ONCE");
+    Serial.print(" armed, delay=");
+    Serial.print(delayMs);
+    Serial.print(" ms, hold=");
+    Serial.print(holdMs);
+    Serial.println(" ms.");
+    return true;
+}
+
 uint32_t getDoneSyntheticRemainingMs(uint32_t nowMs)
 {
     if (g_sealIo.doneSyntheticPending) {
@@ -219,6 +264,7 @@ void registerDoneCompletion(bool synthetic, uint32_t nowMs)
     g_sealIo.waitDoneHeartbeatSeq = 0;
     g_sealIo.lastCompletionSynthetic = synthetic;
     g_sealIo.lastCompletionMs = nowMs;
+    g_sealIo.autoEmuBlockedLastLogMs = 0;
     ++g_sealIo.completionSeq;
 
     if (synthetic) {
@@ -299,10 +345,12 @@ void processSealerGroup()
             g_sealIo.doneRawLastFallMs = nowMs;
         }
 
-        Serial.print("SEAL DONE RAW: ");
-        Serial.print(doneRawActive ? "active" : "released");
-        Serial.print(", pin=");
-        Serial.println(pinLevelText(donePinLevelHigh));
+        if (app::runtime_log::isDebugEnabled()) {
+            Serial.print("SEAL DONE RAW: ");
+            Serial.print(doneRawActive ? "active" : "released");
+            Serial.print(", pin=");
+            Serial.println(pinLevelText(donePinLevelHigh));
+        }
     }
 
     if (doneFilteredActive != doneRawActive) {
@@ -314,6 +362,46 @@ void processSealerGroup()
     }
 
     const bool doneEffectiveActive = doneFilteredActive || g_sealIo.doneSyntheticHoldActive;
+
+    if (g_sealIo.doneSyntheticAutoEnabled &&
+        g_sealIo.waitingDone &&
+        !g_sealIo.doneSyntheticPending &&
+        !g_sealIo.doneSyntheticHoldActive &&
+        !doneRawActive) {
+        (void)armDoneEmulationInternal(
+            g_sealIo.doneSyntheticAutoDelayMs,
+            g_sealIo.doneSyntheticAutoHoldMs,
+            "AUTO");
+    }
+    if (g_sealIo.doneSyntheticAutoEnabled &&
+        g_sealIo.waitingDone &&
+        !g_sealIo.doneSyntheticPending &&
+        !g_sealIo.doneSyntheticHoldActive &&
+        doneRawActive &&
+        elapsedMs(nowMs, g_sealIo.autoEmuBlockedLastLogMs) >= SEAL_AUTO_EMU_BLOCK_LOG_PERIOD_MS) {
+        g_sealIo.autoEmuBlockedLastLogMs = nowMs;
+        Serial.print("SEAL EMU AUTO: arm blocked, DONE raw active, wait_age_ms=");
+        Serial.print(elapsedMs(nowMs, g_sealIo.waitDoneEnteredMs));
+        Serial.print(", done_raw=");
+        Serial.print(doneRawActive ? "active" : "inactive");
+        Serial.print(", done_filtered=");
+        Serial.print(doneFilteredActive ? "active" : "inactive");
+        Serial.print(", done_effective=");
+        Serial.print(doneEffectiveActive ? "active" : "inactive");
+        Serial.print(", completion_seq=");
+        Serial.println(g_sealIo.completionSeq);
+    }
+    if (g_sealIo.doneSyntheticAutoEnabled &&
+        g_sealIo.waitingDone &&
+        !g_sealIo.doneSyntheticPending &&
+        !g_sealIo.doneSyntheticHoldActive &&
+        doneEffectiveActive &&
+        elapsedMs(nowMs, g_sealIo.waitDoneEnteredMs) >= g_sealIo.doneSyntheticAutoDelayMs) {
+        Serial.print("SEAL EMU AUTO: fallback completion, DONE already active without edge, wait_age_ms=");
+        Serial.println(elapsedMs(nowMs, g_sealIo.waitDoneEnteredMs));
+        g_sealIo.doneEffectiveLastActive = doneEffectiveActive;
+        registerDoneCompletion(true, nowMs);
+    }
 
     if (doneEffectiveActive != g_sealIo.doneEffectiveLastActive) {
         g_sealIo.doneEffectiveLastActive = doneEffectiveActive;
@@ -334,7 +422,9 @@ void processSealerGroup()
         } else {
             ++g_sealIo.doneEffectiveFallCount;
             g_sealIo.doneEffectiveLastFallMs = nowMs;
-            Serial.println("SEAL DONE EFF: released.");
+            if (app::runtime_log::isDebugEnabled()) {
+                Serial.println("SEAL DONE EFF: released.");
+            }
         }
     }
 
@@ -359,10 +449,18 @@ void processSealerGroup()
     g_sealIo.waitDoneLastHeartbeatMs = nowMs;
     g_sealIo.waitDoneHeartbeatSeq = 0;
     g_sealIo.lastCompletionSynthetic = false;
+    g_sealIo.autoEmuBlockedLastLogMs = 0;
+    Serial.print("SEAL: WaitDone entered, done_raw=");
+    Serial.print(doneRawActive ? "active" : "inactive");
+    Serial.print(", done_filtered=");
+    Serial.print(doneFilteredActive ? "active" : "inactive");
+    Serial.print(", done_effective=");
+    Serial.print(doneEffectiveActive ? "active" : "inactive");
+    Serial.print(", auto_emu=");
+    Serial.println(g_sealIo.doneSyntheticAutoEnabled ? "on" : "off");
     if (doneEffectiveActive) {
-        Serial.println("SEAL: WaitDone entered while DONE is already active; waiting for new effective edge.");
+        Serial.println("SEAL: WaitDone entered while DONE is already active; waiting for new edge or AUTO fallback.");
     }
-    Serial.println("SEAL: start pulse finished.");
 }
 
 SealerStatus readSealerStatus()
@@ -384,6 +482,7 @@ SealerStatus readSealerStatus()
     status.doneActiveLevelLow = SEAL_DONE_ACTIVE_LEVEL == LOW;
     status.doneSyntheticPending = g_sealIo.doneSyntheticPending;
     status.doneSyntheticHoldActive = g_sealIo.doneSyntheticHoldActive;
+    status.doneSyntheticAutoEnabled = g_sealIo.doneSyntheticAutoEnabled;
     status.lastCompletionSynthetic = g_sealIo.lastCompletionSynthetic;
     status.waitDoneActive = g_sealIo.waitingDone;
     status.completionBlocked = g_sealIo.waitingDone;
@@ -407,6 +506,8 @@ SealerStatus readSealerStatus()
     status.doneSyntheticDelayMs = g_sealIo.doneSyntheticDelayMs;
     status.doneSyntheticHoldMs = g_sealIo.doneSyntheticHoldMs;
     status.doneSyntheticRemainingMs = getDoneSyntheticRemainingMs(nowMs);
+    status.doneSyntheticAutoDelayMs = g_sealIo.doneSyntheticAutoDelayMs;
+    status.doneSyntheticAutoHoldMs = g_sealIo.doneSyntheticAutoHoldMs;
     status.waitDoneBlockReason = waitDoneReason;
 
     if (status.startPulseActive) {
@@ -460,35 +561,7 @@ bool startPulse(uint32_t pulseMs)
 
 bool scheduleDoneEmulationOnce(uint32_t delayMs, uint32_t holdMs)
 {
-    if (!g_sealIo.waitingDone || g_sealIo.startPulseActive) {
-        return false;
-    }
-    if (g_sealIo.doneSyntheticPending || g_sealIo.doneSyntheticHoldActive) {
-        return false;
-    }
-    if (isDoneActiveRaw()) {
-        return false;
-    }
-    if (delayMs > SEAL_DONE_EMU_DELAY_MS_MAX) {
-        return false;
-    }
-    if (holdMs < SEAL_DONE_EMU_HOLD_MS_MIN || holdMs > SEAL_DONE_EMU_HOLD_MS_MAX) {
-        return false;
-    }
-
-    g_sealIo.doneSyntheticPending = true;
-    g_sealIo.doneSyntheticHoldActive = false;
-    g_sealIo.doneSyntheticArmedAtMs = millis();
-    g_sealIo.doneSyntheticHoldStartedMs = 0;
-    g_sealIo.doneSyntheticDelayMs = delayMs;
-    g_sealIo.doneSyntheticHoldMs = holdMs;
-
-    Serial.print("SEAL EMU: ONCE armed, delay=");
-    Serial.print(delayMs);
-    Serial.print(" ms, hold=");
-    Serial.print(holdMs);
-    Serial.println(" ms.");
-    return true;
+    return armDoneEmulationInternal(delayMs, holdMs, "ONCE");
 }
 
 bool cancelDoneEmulation()
@@ -496,6 +569,47 @@ bool cancelDoneEmulation()
     const bool hadEmulation = g_sealIo.doneSyntheticPending || g_sealIo.doneSyntheticHoldActive;
     cancelDoneEmulationInternal("ONCE canceled.");
     return hadEmulation;
+}
+
+bool setAutoDoneEmulation(bool enabled, uint32_t delayMs, uint32_t holdMs)
+{
+    if (delayMs > SEAL_DONE_EMU_DELAY_MS_MAX) {
+        return false;
+    }
+    if (holdMs < SEAL_DONE_EMU_HOLD_MS_MIN || holdMs > SEAL_DONE_EMU_HOLD_MS_MAX) {
+        return false;
+    }
+
+    g_sealIo.doneSyntheticAutoEnabled = enabled;
+    g_sealIo.doneSyntheticAutoDelayMs = delayMs;
+    g_sealIo.doneSyntheticAutoHoldMs = holdMs;
+
+    if (!enabled) {
+        Serial.println("SEAL EMU AUTO: OFF.");
+        return true;
+    }
+
+    Serial.print("SEAL EMU AUTO: ON, delay=");
+    Serial.print(delayMs);
+    Serial.print(" ms, hold=");
+    Serial.print(holdMs);
+    Serial.println(" ms.");
+    return true;
+}
+
+bool isAutoDoneEmulationEnabled()
+{
+    return g_sealIo.doneSyntheticAutoEnabled;
+}
+
+uint32_t getAutoDoneEmulationDelayMs()
+{
+    return g_sealIo.doneSyntheticAutoDelayMs;
+}
+
+uint32_t getAutoDoneEmulationHoldMs()
+{
+    return g_sealIo.doneSyntheticAutoHoldMs;
 }
 
 bool isStartPulseActive()

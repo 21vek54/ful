@@ -1,0 +1,139 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.6 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36" version="29.6.6">
+  <diagram id="manipulator-r-cycle" name="Manipulator R cycle">
+    <mxGraphModel dx="1167" dy="1100" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;" value="Манипулятор COM11: что делает команда R" vertex="1">
+          <mxGeometry height="30" width="700" x="30" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" value="Эта схема показывает только локальную работу платы манипулятора.&#xa;Без мастера, без конвейера, без COMMON.&#xa;Смысл команды `R`: запустить один рабочий цикл переноса." vertex="1">
+          <mxGeometry height="75" width="520" x="30" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9eaf7;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;fontColor=#000000;" value="Команда `R` приходит в `processCommand()`&#xa;и вызывает `startWorkCycle(false)`" vertex="1">
+          <mxGeometry height="70" width="360" x="70" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;fontColor=#000000;" value="Проверки перед стартом:&#xa;- `workCycleInProgress = false`&#xa;- `isCalibrated = true`&#xa;- `isMoving = false`&#xa;- не идёт test / grease&#xa;- стартовая поза = право / верх / разжат&#xa;то есть: `rightLimit=1`, `leftLimit=0`, `zUp=1`, `zDown=0`, `gripOpen=1`, `gripClamped=0`" vertex="1">
+          <mxGeometry height="150" width="390" x="70" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#000000;" value="Если проверка не пройдена:&#xa;- цикл не стартует&#xa;- плата пишет ошибку в Serial&#xa;- оператор должен привести манипулятор в позу: право / верх / разжат" vertex="1">
+          <mxGeometry height="120" width="320" x="525" y="285" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5e1;strokeColor=#82b366;fontSize=13;fontColor=#000000;" value="Если всё нормально:&#xa;- `resetWorkCycleReadyLatches()`&#xa;- `workCycleInProgress = true`&#xa;- `currentStep = 1`&#xa;- `step3ReachedLatch = false`&#xa;- `step7ReachedLatch = false`&#xa;- job code по I2C = `WORK`&#xa;- status bit `BUSY = 1`" vertex="1">
+          <mxGeometry height="140" width="390" x="70" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 1&#xa;Опустить вертикаль" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 1:&#xa;право / низ / разжат&#xa;`currentStep = 1`&#xa;`rightLimit=1`, `leftLimit=0`&#xa;`zUp=0`, `zDown=1`&#xa;`gripOpen=1`, `gripClamped=0`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 2&#xa;Закрыть захват" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="770" as="geometry" />
+        </mxCell>
+        <mxCell id="23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 2:&#xa;право / низ / сжат&#xa;`currentStep = 2`&#xa;`rightLimit=1`, `leftLimit=0`&#xa;`zUp=0`, `zDown=1`&#xa;`gripOpen=0`, `gripClamped=1`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 3&#xa;Поднять вертикаль" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="890" as="geometry" />
+        </mxCell>
+        <mxCell id="25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 3:&#xa;право / верх / сжат&#xa;`currentStep = 3`&#xa;`rightLimit=1`, `leftLimit=0`&#xa;`zUp=1`, `zDown=0`&#xa;`gripOpen=0`, `gripClamped=1`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;fontColor=#000000;" value="После шага 3 поднимается latch:&#xa;`step3ReachedLatch = true`&#xa;по I2C: `statusWord.bit6 = step3_ready`" vertex="1">
+          <mxGeometry height="100" width="300" x="650" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 4&#xa;Поехать влево" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 4:&#xa;лево / верх / сжат&#xa;`currentStep = 4`&#xa;`rightLimit=0`, `leftLimit=1`&#xa;`zUp=1`, `zDown=0`&#xa;`gripOpen=0`, `gripClamped=1`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="1000" as="geometry" />
+        </mxCell>
+        <mxCell id="29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 5&#xa;Опустить вертикаль" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="1130" as="geometry" />
+        </mxCell>
+        <mxCell id="30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 5:&#xa;лево / низ / сжат&#xa;`currentStep = 5`&#xa;`rightLimit=0`, `leftLimit=1`&#xa;`zUp=0`, `zDown=1`&#xa;`gripOpen=0`, `gripClamped=1`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="1120" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 6&#xa;Открыть захват" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="1250" as="geometry" />
+        </mxCell>
+        <mxCell id="32" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 6:&#xa;лево / низ / разжат&#xa;`currentStep = 6`&#xa;`rightLimit=0`, `leftLimit=1`&#xa;`zUp=0`, `zDown=1`&#xa;`gripOpen=1`, `gripClamped=0`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="1240" as="geometry" />
+        </mxCell>
+        <mxCell id="33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 7&#xa;Поднять вертикаль" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="1370" as="geometry" />
+        </mxCell>
+        <mxCell id="34" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 7:&#xa;лево / верх / разжат&#xa;`currentStep = 7`&#xa;`rightLimit=0`, `leftLimit=1`&#xa;`zUp=1`, `zDown=0`&#xa;`gripOpen=1`, `gripClamped=0`" vertex="1">
+          <mxGeometry height="100" width="300" x="310" y="1360" as="geometry" />
+        </mxCell>
+        <mxCell id="35" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;fontColor=#000000;" value="После шага 7 поднимается latch:&#xa;`step7ReachedLatch = true`&#xa;по I2C: `statusWord.bit5 = step7_ready`" vertex="1">
+          <mxGeometry height="100" width="300" x="650" y="1360" as="geometry" />
+        </mxCell>
+        <mxCell id="36" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontSize=14;fontStyle=1;fontColor=#000000;" value="Шаг 8&#xa;Поехать вправо" vertex="1">
+          <mxGeometry height="70" width="220" x="70" y="1490" as="geometry" />
+        </mxCell>
+        <mxCell id="37" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=13;fontColor=#000000;" value="Состояние после шага 8:&#xa;право / верх / разжат&#xa;это исходная поза&#xa;`currentStep = 8`&#xa;`rightLimit=1`, `leftLimit=0`&#xa;`zUp=1`, `zDown=0`&#xa;`gripOpen=1`, `gripClamped=0`" vertex="1">
+          <mxGeometry height="120" width="300" x="310" y="1480" as="geometry" />
+        </mxCell>
+        <mxCell id="40" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1;fontColor=#000000;" value="Успешный финал цикла" vertex="1">
+          <mxGeometry height="55" width="250" x="980" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="41" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=13;fontColor=#000000;" value="После завершения:&#xa;- `clearWorkCycleState()`&#xa;- `workCycleInProgress = false`&#xa;- `recoveryMode = false`&#xa;- `currentStep = 0`&#xa;- job code уходит из `WORK` в `NONE`&#xa;- `BUSY = 0`" vertex="1">
+          <mxGeometry height="140" width="300" x="980" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="42" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;fontColor=#000000;" value="Важно: latch `step3` и `step7` не сбрасываются сразу после успеха.&#xa;После успеха обычно:&#xa;- `step3ReachedLatch = true`&#xa;- `step7ReachedLatch = true`&#xa;Они держатся до следующего старта `R`, когда вызывается `resetWorkCycleReadyLatches()`." vertex="1">
+          <mxGeometry height="120" width="320" x="980" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="43" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9eaf7;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;fontColor=#000000;" value="Что видно наружу по I2C во время `R`" vertex="1">
+          <mxGeometry height="55" width="280" x="980" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="44" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=13;fontColor=#000000;" value="- `statusWord.bit1 = BUSY` пока цикл идёт&#xa;- `extra1 = JOB_CODE_WORK`&#xa;- `extra3` старший байт = `currentStep`&#xa;- на шаге 3: `bit6 = step3_ready`&#xa;- на шаге 7: `bit5 = step7_ready`&#xa;- если аварии нет, `READY = 1`" vertex="1">
+          <mxGeometry height="150" width="320" x="980" y="940" as="geometry" />
+        </mxCell>
+        <mxCell id="45" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;fontStyle=1;fontColor=#000000;" value="Если любой шаг не выполнен" vertex="1">
+          <mxGeometry height="55" width="250" x="980" y="1140" as="geometry" />
+        </mxCell>
+        <mxCell id="46" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fde9e7;strokeColor=#b85450;fontSize=13;fontColor=#000000;" value="- `saveWorkCycleState(step, true)`&#xa;- `workCycleInProgress = false`&#xa;- `recoveryMode = false`&#xa;- `resetWorkCycleReadyLatches()`&#xa;- `BUSY = 0`&#xa;- цикл прерывается с ошибкой" vertex="1">
+          <mxGeometry height="140" width="300" x="980" y="1220" as="geometry" />
+        </mxCell>
+        <mxCell id="1000" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1001" edge="1" parent="1" source="11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1002" edge="1" parent="1" source="13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="20">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1003" edge="1" parent="1" source="20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1004" edge="1" parent="1" source="22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1005" edge="1" parent="1" source="24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1006" edge="1" parent="1" source="27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="29">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1007" edge="1" parent="1" source="29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="31">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1008" edge="1" parent="1" source="31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1009" edge="1" parent="1" source="33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="36">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1010" edge="1" parent="1" source="36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;fontColor=#000000;" target="40">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1011" edge="1" parent="1" source="11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#b85450;fontColor=#000000;" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

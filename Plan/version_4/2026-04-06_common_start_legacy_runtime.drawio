@@ -1,0 +1,207 @@
+<mxfile host="app.diagrams.net" modified="2026-04-06T12:00:00.000Z" agent="Codex" version="29.6.6">
+  <diagram id="common-start-legacy-runtime" name="COMMON START legacy runtime">
+    <mxGraphModel dx="1600" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="2" value="COMMON START: фактический runtime через legacy master" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="820" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="Контур для этой схемы: COM12 = legacy master из archive, COM10 и COM11 = I2C slave-платы.&#xa;Вывод по коду: прямого COM10 ↔ COM11 обмена в текущем runtime не видно; оркестрация COMMON живёт на мастере." style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="760" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="10" value="Этап" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9e2f3;strokeColor=#6c8ebf;fontStyle=1;fontSize=14;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="145" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="COM12 legacy master" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1f4e79;strokeColor=#1f4e79;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="180" y="145" width="460" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="COM10 conveyor" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#2e7d32;strokeColor=#2e7d32;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="640" y="145" width="460" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="COM11 manipulator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#6a1b9a;strokeColor=#6a1b9a;fontColor=#ffffff;fontStyle=1;fontSize=16;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="145" width="460" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="20" value="Функция / условие" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddebf7;strokeColor=#6c8ebf;fontStyle=1;fontSize=13;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="180" y="170" width="230" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Меняет" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddebf7;strokeColor=#6c8ebf;fontStyle=1;fontSize=13;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="410" y="170" width="230" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="Функция / условие" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e2f0d9;strokeColor=#82b366;fontStyle=1;fontSize=13;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="640" y="170" width="230" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="Меняет" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e2f0d9;strokeColor=#82b366;fontStyle=1;fontSize=13;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="870" y="170" width="230" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="Функция / условие" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontStyle=1;fontSize=13;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="170" width="230" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="25" value="Меняет" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#9673a6;fontStyle=1;fontSize=13;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="170" width="230" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="100" value="1. Команда&#xa;COMMON START" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="195" width="160" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="101" value="CLI ветка `COMMON` вызывает `startCommonCycle()`.&#xa;Дальше рабочий loop постоянно гоняет `processCommonCycle()`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="195" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="102" value="`g_commonCycle.active = true`&#xa;`stage = WaitInitialBatch`&#xa;`pauseState = None`&#xa;`lastEvent = COMMON: waiting initial batch`&#xa;фиксируется `sealerDonePendingUnload`" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="195" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="103" value="Новой команды ещё нет.&#xa;COM10 только отвечает на I2C-опрос мастера статусным кадром." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="195" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="104" value="Меняется только текущее содержимое status frame / heartbeat." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="195" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="105" value="Новой команды ещё нет.&#xa;COM11 тоже только отдаёт статус мастеру." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="195" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="106" value="Меняется только текущее содержимое status frame / heartbeat." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="195" width="230" height="95" as="geometry" />
+        </mxCell>
+
+        <mxCell id="110" value="2. WaitInitialBatch" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="290" width="160" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="111" value="`processCommonCycle()` решает:&#xa;если `batch ready` уже есть, идти в запуск манипулятора;&#xa;если партии нет и конвейер не busy, шлёт на COM10 команду `1` для `Program1`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="290" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="112" value="Меняется `lastConsumedBatchSeq`, когда партия уже готова.&#xa;Меняются `lastEvent` и дальнейший переход по stage." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="290" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="113" value="Получает `I2C CMD: 1`, далее `handleCommand(&quot;1&quot;)`.&#xa;Это локальный старт `Program1` и набора партии на подводящей стороне." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="290" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="114" value="`program1StateCode != 0`&#xa;идут изменения `bufferCount / passIndex / batchReady`&#xa;растёт `batchReadySequence`&#xa;обновляется strict feed-side model" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="290" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="115" value="На этом шаге манипулятор только status-provider.&#xa;Новой команды ещё нет." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="290" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="116" value="Собственных runtime-изменений от COMMON пока нет." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="290" width="230" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="120" value="3. Подготовка и старт&#xa;манипулятора" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="410" width="160" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="121" value="`startCommonManipulatorWorkCycle()` проверяет стартовую позу.&#xa;Если поза готова, шлёт `R`.&#xa;Если надо только открыть захват, шлёт `Q`, ждёт `WaitManipReady`, потом шлёт `R`.&#xa;После `R` при загрузке в sealer шлёт на COM10 `FSC`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="410" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="122" value="Меняются `currentCycleLoadsSealer`, `step3LaunchDone`, `parallelLaunchDone`, `manipStarts`, `manipStartReason`.&#xa;`stage` переходит в `WaitManipReady` или сразу в `WaitManipStep7`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="410" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="123" value="После старта `R` может прийти `FSC`.&#xa;Это служебная синхронизация: мастер сообщает, что `IN2` считан / consumed для strict-модели." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="410" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="124" value="Обновляется strict feed-side runtime:&#xa;`conveyorFeedSideNoteIn2Consumed()`&#xa;синхронизируется snapshot пустоты / занятости подводящей стороны." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="410" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="125" value="Получает `I2C CMD: Q` или `I2C CMD: R`, затем `processCommand(line)`.&#xa;`Q` открывает захват, `R` запускает рабочий цикл." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="410" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="126" value="Меняются grip / pneumo state.&#xa;При `R`: `workCycleInProgress = true`, `currentStep` идёт в `1..8`, `busy = 1` в status word." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="410" width="230" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="130" value="4. Достижение step3" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="520" width="160" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="131" value="`processCommonCycle()` ждёт `manipulatorStep3Ready()`.&#xa;Когда latch поднят, вызывает `startCommonInfeedFillAfterStep3()` и повторно шлёт `1` на COM10." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="520" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="132" value="`step3LaunchDone = true`&#xa;`lastEvent = COMMON: step3 reached, started P1`" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="520" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="133" value="Получает второй `I2C CMD: 1`.&#xa;Параллельно с движением манипулятора начинает набор следующей партии." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="520" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="134" value="Снова меняются `program1StateCode`, `passIndex`, `bufferCount`, `batchReadySequence` и feed-side model." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="520" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="135" value="Внутри `work_cycle.cpp` поднимается step3 latch." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="520" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="136" value="`step3ReachedLatch = true`&#xa;в status frame поднимается `statusWord.bit6 = step3_ready`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="520" width="230" height="95" as="geometry" />
+        </mxCell>
+
+        <mxCell id="140" value="5. Достижение step7" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="615" width="160" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="141" value="Мастер ждёт `manipulatorStep7Ready()`.&#xa;При latch = 1 вызывает `startCommonStep7Processes()`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="615" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="142" value="Это последняя точка перед параллельным запуском `OTCYCLE + SEAL`.&#xa;До вызова `startCommonStep7Processes()` `parallelLaunchDone` ещё не поднят." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="615" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="143" value="На этом шаге COM10 ещё не делает нового действия.&#xa;Он только готов принять следующие команды мастера." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="615" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="144" value="Новых локальных переменных COMMON тут ещё не меняется." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="615" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="145" value="Внутри `work_cycle.cpp` поднимается step7 latch." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="615" width="230" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="146" value="`step7ReachedLatch = true`&#xa;в status frame поднимается `statusWord.bit5 = step7_ready`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="615" width="230" height="95" as="geometry" />
+        </mxCell>
+
+        <mxCell id="150" value="6. Параллельный запуск&#xa;после step7" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="710" width="160" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="151" value="`startCommonStep7Processes()` делает три вещи:&#xa;1) запускает `startOtvodWorkCycle()`&#xa;2) шлёт на COM10 `OTVOD &lt;steps&gt;`, затем по своей логике `VFDTICK RUN`&#xa;3) если текущий цикл грузит sealer, шлёт `SEAL START &lt;ms&gt;`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="710" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="152" value="`parallelLaunchDone = true`&#xa;`parallelStarts++`&#xa;`stage = WaitNextBatch`&#xa;`sealStartedMs` фиксируется&#xa;`sealerDonePendingUnload = false`&#xa;`lastEvent = step7 reached, started OTCYCLE + SEAL`" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="710" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="153" value="COM10 получает и исполняет локальные команды: `OTVOD`, `VFDTICK RUN`, `SEAL START`.&#xa;Все они проходят через I2C text → `handleCommand(line)`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="710" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="154" value="Меняются локальные runtime:&#xa;`step2 active / completionSeq`&#xa;`vfdTimedRunActive`&#xa;`sealer runState: Idle → StartPulseActive → WaitDone`&#xa;дальше растёт `completionSeq` по DONE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="710" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="155" value="Новой команды на COM11 на этом шаге нет.&#xa;Манипулятор просто дочищает уже идущий цикл." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="710" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="156" value="`currentStep` идёт `7 → 8 → 0`, затем `busy → idle`.&#xa;Latch-и `step3/step7` держатся до следующего старта `R`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="710" width="230" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="160" value="7. WaitNextBatch&#xa;и переход к следующему циклу" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="820" width="160" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="161" value="`processCommonCycle()` дальше контролирует settle:&#xa;манипулятор idle + `otvod ready` + `sealer done for current cycle`.&#xa;После этого либо ждёт `nextBatchReady`, либо снова шлёт `1`, потом `R`." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="820" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="162" value="`stage` остаётся `WaitNextBatch` до следующего разворота.&#xa;Меняются `lastConsumedBatchSeq`, pause-флаги, `lastEvent`.&#xa;Это уже выход из стартовой фазы в повторяемый COMMON loop." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eaf3ff;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="410" y="820" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="163" value="COM10 дальше остаётся исполнительной платой и поставщиком статуса для мастера." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="820" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="164" value="Обновляются `statusWord`, `errorWord`, `extra*`, heartbeat и completion counters." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eef8ea;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="870" y="820" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="165" value="COM11 дальше тоже только отдаёт статус до следующей команды мастера." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="820" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="166" value="`mode = IDLE`, `step = 0`; latch-и держатся до нового `R`, потом сбрасываются в начале следующего цикла." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7ecfb;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="820" width="230" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="170" value="Короткий вывод для следующей схемы: в этом runtime `COMMON START` реально централизован на COM12.&#xa;COM10 и COM11 не принимают решений уровня линии; они исполняют текстовые I2C-команды мастера и отдают status frame назад." style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="950" width="860" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,6 +1,8 @@
 #include <Arduino.h>
 
 #include "app/conveyor_status_runtime.h"
+#include "app/pause_contract.h"
+#include "app/runtime_log.h"
 #include "legacy/program1.h"
 
 namespace {
@@ -42,6 +44,15 @@ Program1Metric g_program1Metrics[PROGRAM1_MAX_METRICS] = {};
 uint8_t g_program1MetricCount = 0;
 int8_t g_program1ActiveC2Metric = -1;
 int8_t g_program1ActivePosMetric = -1;
+
+template <typename Fn>
+void withProgram1DebugLog(Fn fn)
+{
+    if (!app::runtime_log::isDebugEnabled()) {
+        return;
+    }
+    fn();
+}
 
 void clearProgram1ManipulatorBatchReady()
 {
@@ -94,7 +105,9 @@ void printProgram1MetricLabel(const Program1Metric &metric)
 int8_t beginProgram1Metric(Program1MetricKind kind, uint8_t passIndex)
 {
     if (g_program1MetricCount >= PROGRAM1_MAX_METRICS) {
-        Serial.println("P1: overflow metrics.");
+        withProgram1DebugLog([]() {
+            Serial.println("P1: overflow metrics.");
+        });
         return -1;
     }
 
@@ -142,6 +155,10 @@ void updateProgram1AsyncMetrics()
 
 void printProgram1Summary()
 {
+    if (!app::runtime_log::isDebugEnabled()) {
+        return;
+    }
+
     uint32_t sum2Ms = 0;
     uint32_t sumCMs = 0;
     uint32_t sum3Ms = 0;
@@ -225,9 +242,11 @@ void startProgram1Cycle2(uint8_t passIndex)
 void startProgram1Pos3(uint8_t passIndex)
 {
     if (program1IsPositionalMotionActive()) {
-        Serial.print("P1: 3 #");
-        Serial.print(passIndex);
-        Serial.println(" не запущена, позиционный мотор уже в движении.");
+        withProgram1DebugLog([passIndex]() {
+            Serial.print("P1: 3 #");
+            Serial.print(passIndex);
+            Serial.println(" не запущена, позиционный мотор уже в движении.");
+        });
         return;
     }
 
@@ -281,7 +300,9 @@ bool runProgram1PassShiftSequence(uint8_t passIndex, bool withPositional)
 
 void startProgram1BufferFillCycle()
 {
-    Serial.println("P1: запускаем дополнительный 2 для наполнения буфера.");
+    withProgram1DebugLog([]() {
+        Serial.println("P1: запускаем дополнительный 2 для наполнения буфера.");
+    });
     startProgram1Cycle2Metric(Program1MetricKind::BufferFill, 1);
     if (!program1IsCycle2Active()) {
         Serial.println("P1: ошибка, не удалось запустить буферный 2.");
@@ -298,7 +319,9 @@ void finishProgram1Run()
 {
     program1MarkBufferReady();
     Serial.println("P1: программа 1 завершена.");
-    Serial.println("P1: буфер пополнен, в памяти отмечено: тарелки есть.");
+    withProgram1DebugLog([]() {
+        Serial.println("P1: буфер пополнен, в памяти отмечено: тарелки есть.");
+    });
     printProgram1Summary();
     g_program1State = Program1State::Idle;
     g_program1PassIndex = 0;
@@ -309,25 +332,33 @@ void finishProgram1Run()
 void printProgram1PassStartMessage(uint8_t passIndex)
 {
     if (passIndex == 1 && g_program1StartedFromBuffer) {
-        Serial.println("P1: буферный старт. Выполняем C, затем 3 + Z.");
+        withProgram1DebugLog([]() {
+            Serial.println("P1: буферный старт. Выполняем C, затем 3 + Z.");
+        });
         return;
     }
 
     if (passIndex < 3) {
-        Serial.print("P1: ");
-        Serial.print(passIndex);
-        Serial.println("-й проход 2 завершен. Выполняем C, затем 3 + Z.");
+        withProgram1DebugLog([passIndex]() {
+            Serial.print("P1: ");
+            Serial.print(passIndex);
+            Serial.println("-й проход 2 завершен. Выполняем C, затем 3 + Z.");
+        });
         return;
     }
 
-    Serial.println("P1: 3-й проход 2 завершен. Финальный C + Z.");
+    withProgram1DebugLog([]() {
+        Serial.println("P1: 3-й проход 2 завершен. Финальный C + Z.");
+    });
 }
 
 void startProgram1NextCycle2(uint8_t nextPassIndex)
 {
-    Serial.print("P1: шаг ");
-    Serial.print(nextPassIndex);
-    Serial.println("/3 -> команда 2.");
+    withProgram1DebugLog([nextPassIndex]() {
+        Serial.print("P1: шаг ");
+        Serial.print(nextPassIndex);
+        Serial.println("/3 -> команда 2.");
+    });
     startProgram1Cycle2(nextPassIndex);
     g_program1PassIndex = nextPassIndex;
     g_program1StartedFromBuffer = false;
@@ -367,7 +398,9 @@ void runProgram1Pass()
     }
 
     if (g_program1ActivePosMetric >= 0 || program1IsPositionalMotionActive()) {
-        Serial.println("P1: ждем завершение последнего этапа 3 перед наполнением буфера.");
+        withProgram1DebugLog([]() {
+            Serial.println("P1: ждем завершение последнего этапа 3 перед наполнением буфера.");
+        });
         g_program1State = Program1State::WaitFinalPositionalDone;
         return;
     }
@@ -381,6 +414,16 @@ void startProgram1()
 {
     if (g_program1State != Program1State::Idle) {
         Serial.println("P1: программа 1 уже выполняется.");
+        return;
+    }
+
+    if (app::pauseContractIsArmed()) {
+        Serial.println("P1: start blocked, pause_prepare is active.");
+        return;
+    }
+
+    if (app::conveyorProgram1AbortRecoveryRequired()) {
+        Serial.println("P1: start blocked, recovery required after previous abort (run FSINV after recovery).");
         return;
     }
 
@@ -405,14 +448,18 @@ void startProgram1()
     app::conveyorFeedSideNoteProgram1Started(startedFromBuffer);
 
     if (startedFromBuffer) {
-        Serial.println("P1: буфер с 2 тарелками найден, начинаем сразу с C #1.");
+        withProgram1DebugLog([]() {
+            Serial.println("P1: буфер с 2 тарелками найден, начинаем сразу с C #1.");
+        });
         program1ConsumeBuffer();
         g_program1StartedFromBuffer = true;
         g_program1State = Program1State::RunPass;
         return;
     }
 
-    Serial.println("P1: шаг 1/3 -> команда 2.");
+    withProgram1DebugLog([]() {
+        Serial.println("P1: шаг 1/3 -> команда 2.");
+    });
     startProgram1Cycle2(1);
     g_program1State = Program1State::WaitCycle2Done;
 }

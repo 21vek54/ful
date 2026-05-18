@@ -19,7 +19,15 @@ struct ConveyorStatusInputs {
     bool batchReady = false;
     bool feedSideEmptyStrict = false;
     bool feedSideEmptyValid = false;
+    int8_t feedBufferCount = -1;
+    bool feedBufferCountKnown = false;
+    int8_t feedIn2Pairs = -1;
+    bool feedIn2PairsKnown = false;
+    int8_t sealerPlateCount = -1;
+    bool sealerPlateCountKnown = false;
+    bool program1AbortRecoveryRequired = false;
     bool flagUp = false;
+    bool post7ManualRecoveryRequired = false;
 };
 
 struct ConveyorStatusSnapshot {

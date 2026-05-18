@@ -1,6 +1,8 @@
 #include <Arduino.h>
 
+#include "app/runtime_log.h"
 #include "core/pins.h"
+#include "legacy/program1.h"
 #include "legacy/shift_control.h"
 
 namespace {
@@ -22,7 +24,10 @@ constexpr uint32_t SHIFT_SENSOR_DEBOUNCE_MS = 25;
 constexpr uint32_t SHIFT_LEAVE_SENSOR_MAX_STEPS = 300;
 constexpr uint32_t SHIFT_CAL_SEARCH_MAX_STEPS = 12000;
 constexpr uint32_t SHIFT_CAL_MOVE_MARGIN_STEPS = 50;
+constexpr uint32_t SHIFT_RUNTIME_Z_RECOVERY_MARGIN_STEPS = 400;
+constexpr uint32_t SHIFT_RUNTIME_C_RECOVERY_MARGIN_STEPS = 400;
 constexpr uint32_t SHIFT_TRAVEL_STEPS_FIXED = 2255;
+constexpr uint32_t SHIFT_AUX_SERVICE_INTERVAL_US = 1000;
 
 struct SensorFilterState {
     bool initialized = false;
@@ -35,6 +40,18 @@ SensorFilterState g_shiftSensorZFilter;
 SensorFilterState g_shiftSensorCFilter;
 bool g_shiftCalibrated = true;
 uint32_t g_shiftTravelSteps = SHIFT_TRAVEL_STEPS_FIXED;
+uint32_t g_shiftLastAuxServiceUs = 0;
+
+bool shouldLogShiftTrace(bool allowPositionalOverlap)
+{
+    if (!allowPositionalOverlap) {
+        return true;
+    }
+    if (program1GetStateCode() == 0U) {
+        return true;
+    }
+    return app::runtime_log::isDebugEnabled();
+}
 
 void updateDebouncedSensorFilter(
     SensorFilterState &state,
@@ -83,6 +100,13 @@ void serviceShiftBackground(bool allowPositionalOverlap)
     shiftHookUpdateMainSensorFilter();
     shiftUpdateSensorFilters();
     shiftHookProcessI2cBus();
+    const uint32_t nowUs = micros();
+    if ((uint32_t)(nowUs - g_shiftLastAuxServiceUs) >= SHIFT_AUX_SERVICE_INTERVAL_US) {
+        g_shiftLastAuxServiceUs = nowUs;
+        shiftHookProcessOutfeedGroup();
+        shiftHookProcessSealerGroup();
+        shiftHookProcessPost7Supervisor();
+    }
     if (allowPositionalOverlap) {
         shiftHookProcessPositionalMotion();
     }
@@ -354,19 +378,22 @@ uint32_t getShiftLeaveLimitSteps()
 bool runFixedShiftMove(bool dirLevel, const char *name, bool allowPositionalOverlap)
 {
     const uint32_t shiftNominalDelayUs = getShiftNominalDelayUs(dirLevel);
-    Serial.print("SHIFT: калибровки нет, ");
-    Serial.print(name);
-    Serial.print(" выполнится на фиксированные ");
-    Serial.print(SHIFT_COMMAND_STEPS);
-    Serial.println(" шагов.");
+    const bool verbose = shouldLogShiftTrace(allowPositionalOverlap);
+    if (verbose) {
+        Serial.print("SHIFT: калибровки нет, ");
+        Serial.print(name);
+        Serial.print(" выполнится на фиксированные ");
+        Serial.print(SHIFT_COMMAND_STEPS);
+        Serial.println(" шагов.");
 
-    Serial.print("SHIFT: старт ");
-    Serial.print(name);
-    Serial.print(", шагов=");
-    Serial.print(SHIFT_COMMAND_STEPS);
-    Serial.print(", задержка=");
-    Serial.print(shiftNominalDelayUs);
-    Serial.println(" мкс.");
+        Serial.print("SHIFT: старт ");
+        Serial.print(name);
+        Serial.print(", шагов=");
+        Serial.print(SHIFT_COMMAND_STEPS);
+        Serial.print(", задержка=");
+        Serial.print(shiftNominalDelayUs);
+        Serial.println(" мкс.");
+    }
 
     prepareShiftMove(dirLevel);
     uint32_t profileStepIndex = 0;
@@ -375,43 +402,44 @@ bool runFixedShiftMove(bool dirLevel, const char *name, bool allowPositionalOver
         profileStepIndex++;
     }
 
-    Serial.print("SHIFT: выполнено ");
-    Serial.print(name);
-    Serial.print(", шагов=");
-    Serial.print(SHIFT_COMMAND_STEPS);
-    Serial.print(", задержка=");
-    Serial.print(shiftNominalDelayUs);
-    Serial.println(" мкс.");
+    if (verbose) {
+        Serial.print("SHIFT: выполнено ");
+        Serial.print(name);
+        Serial.print(", шагов=");
+        Serial.print(SHIFT_COMMAND_STEPS);
+        Serial.print(", задержка=");
+        Serial.print(shiftNominalDelayUs);
+        Serial.println(" мкс.");
+    }
     return true;
 }
 
 bool moveShiftToTargetEdge(bool dirLevel, bool allowPositionalOverlap, uint32_t &totalSteps)
 {
-    const uint32_t maxSeekSteps = g_shiftTravelSteps + SHIFT_CAL_MOVE_MARGIN_STEPS;
+    const uint32_t strictSeekSteps = g_shiftTravelSteps + SHIFT_CAL_MOVE_MARGIN_STEPS;
+    uint32_t maxSeekSteps = strictSeekSteps;
+    if (dirLevel == SHIFT_DIR_Z_LEVEL) {
+        // Для возврата в Z держим расширенное окно поиска:
+        // под overlap-нагрузкой на линии фактический ход может уйти за strict +50.
+        const uint32_t extendedSeekSteps = strictSeekSteps + SHIFT_RUNTIME_Z_RECOVERY_MARGIN_STEPS;
+        maxSeekSteps = (extendedSeekSteps > SHIFT_CAL_SEARCH_MAX_STEPS)
+            ? SHIFT_CAL_SEARCH_MAX_STEPS
+            : extendedSeekSteps;
+    } else if (dirLevel == SHIFT_DIR_C_LEVEL && allowPositionalOverlap) {
+        // Для рабочего шага C в P1 даем такой же runtime запас:
+        // после Z-fix дефект сместился на C при том же overlap-профиле нагрузки.
+        const uint32_t extendedSeekSteps = strictSeekSteps + SHIFT_RUNTIME_C_RECOVERY_MARGIN_STEPS;
+        maxSeekSteps = (extendedSeekSteps > SHIFT_CAL_SEARCH_MAX_STEPS)
+            ? SHIFT_CAL_SEARCH_MAX_STEPS
+            : extendedSeekSteps;
+    }
     totalSteps = 0;
 
-    if (isShiftOppositeSensorTriggered(dirLevel)) {
-        uint32_t leaveSteps = 0;
-        const uint32_t leaveLimitSteps = getShiftLeaveLimitSteps();
-        uint32_t profileStepIndex = totalSteps;
-        if (!shiftLeaveSensor(
-                dirLevel,
-                getShiftOppositeSensorFn(dirLevel),
-                leaveLimitSteps,
-                leaveSteps,
-                profileStepIndex,
-                maxSeekSteps,
-                allowPositionalOverlap)) {
-            Serial.print("SHIFT: не удалось уйти с противоположного края. Лимит=");
-            Serial.print(leaveLimitSteps);
-            Serial.println(" шагов.");
-            return false;
-        }
-        totalSteps += leaveSteps;
-    }
-
+    // Рабочий ход в production-цикле ведем напрямую к целевому краю.
+    // Жесткий pre-check "уйти с противоположного края" создавал ложные abort
+    // при временном залипании противоположного геркона в параллельном цикле.
     uint32_t seekSteps = 0;
-    uint32_t profileStepIndex = totalSteps;
+    uint32_t profileStepIndex = 0;
     const bool reachedEdge = shiftFindSensor(
         dirLevel,
         getShiftTargetSensorFn(dirLevel),
@@ -420,12 +448,14 @@ bool moveShiftToTargetEdge(bool dirLevel, bool allowPositionalOverlap, uint32_t 
         profileStepIndex,
         maxSeekSteps,
         allowPositionalOverlap);
-    totalSteps += seekSteps;
+    totalSteps = seekSteps;
     return reachedEdge;
 }
 
 bool runShiftMoveInternal(bool dirLevel, const char *name, bool allowPositionalOverlap)
 {
+    const bool verbose = shouldLogShiftTrace(allowPositionalOverlap);
+
     if (shiftHookIsMotionActive() || shiftHookIsCycle2Active() ||
         (shiftHookIsPositionalMotionActive() && !allowPositionalOverlap)) {
         Serial.println("SHIFT: отказ, другой двигатель уже в движении.");
@@ -443,32 +473,56 @@ bool runShiftMoveInternal(bool dirLevel, const char *name, bool allowPositionalO
         return false;
     }
     if (targetActive) {
-        Serial.print("SHIFT: ");
-        Serial.print(name);
-        Serial.println(" не требуется, каретка уже в нужном крайнем положении.");
+        if (verbose) {
+            Serial.print("SHIFT: ");
+            Serial.print(name);
+            Serial.println(" не требуется, каретка уже в нужном крайнем положении.");
+        }
         return true;
     }
 
     const uint32_t shiftNominalDelayUs = getShiftNominalDelayUs(dirLevel);
     uint32_t totalSteps = 0;
 
-    Serial.print("SHIFT: старт ");
-    Serial.print(name);
-    Serial.print(", откалиброванный ход=");
-    Serial.print(g_shiftTravelSteps);
-    Serial.print(" шагов, задержка=");
-    Serial.print(shiftNominalDelayUs);
-    Serial.println(" мкс.");
+    if (verbose) {
+        Serial.print("SHIFT: старт ");
+        Serial.print(name);
+        Serial.print(", откалиброванный ход=");
+        Serial.print(g_shiftTravelSteps);
+        Serial.print(" шагов, задержка=");
+        Serial.print(shiftNominalDelayUs);
+        Serial.println(" мкс.");
+    }
 
     const bool reachedEdge = moveShiftToTargetEdge(dirLevel, allowPositionalOverlap, totalSteps);
-    if (reachedEdge) {
+    if (reachedEdge && verbose) {
         Serial.print("SHIFT: выполнено ");
         Serial.print(name);
         Serial.print(", дошли до края, шагов=");
         Serial.print(totalSteps);
         Serial.println(".");
-    } else {
-        const uint32_t maxSeekSteps = g_shiftTravelSteps + SHIFT_CAL_MOVE_MARGIN_STEPS;
+        const uint32_t strictSeekSteps = g_shiftTravelSteps + SHIFT_CAL_MOVE_MARGIN_STEPS;
+        if (dirLevel == SHIFT_DIR_Z_LEVEL && totalSteps > strictSeekSteps) {
+            Serial.print("SHIFT: Z найден за пределом strict-лимита, использован recovery-margin, шагов=");
+            Serial.print(totalSteps);
+            Serial.print(", strict=");
+            Serial.print(strictSeekSteps);
+            Serial.println(".");
+        }
+    } else if (!reachedEdge) {
+        const uint32_t strictSeekSteps = g_shiftTravelSteps + SHIFT_CAL_MOVE_MARGIN_STEPS;
+        uint32_t maxSeekSteps = strictSeekSteps;
+        if (dirLevel == SHIFT_DIR_Z_LEVEL) {
+            const uint32_t extendedSeekSteps = strictSeekSteps + SHIFT_RUNTIME_Z_RECOVERY_MARGIN_STEPS;
+            maxSeekSteps = (extendedSeekSteps > SHIFT_CAL_SEARCH_MAX_STEPS)
+                ? SHIFT_CAL_SEARCH_MAX_STEPS
+                : extendedSeekSteps;
+        } else if (dirLevel == SHIFT_DIR_C_LEVEL && allowPositionalOverlap) {
+            const uint32_t extendedSeekSteps = strictSeekSteps + SHIFT_RUNTIME_C_RECOVERY_MARGIN_STEPS;
+            maxSeekSteps = (extendedSeekSteps > SHIFT_CAL_SEARCH_MAX_STEPS)
+                ? SHIFT_CAL_SEARCH_MAX_STEPS
+                : extendedSeekSteps;
+        }
         Serial.print("SHIFT: край не найден, остановка по лимиту. Шагов=");
         Serial.print(totalSteps);
         Serial.print(", лимит=");

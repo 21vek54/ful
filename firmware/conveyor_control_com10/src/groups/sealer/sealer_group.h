@@ -33,6 +33,7 @@ struct SealerStatus {
     bool doneActiveLevelLow = true;
     bool doneSyntheticPending = false;
     bool doneSyntheticHoldActive = false;
+    bool doneSyntheticAutoEnabled = false;
     bool lastCompletionSynthetic = false;
     bool waitDoneActive = false;
     bool completionBlocked = false;
@@ -59,6 +60,8 @@ struct SealerStatus {
     uint32_t doneSyntheticDelayMs = 0;
     uint32_t doneSyntheticHoldMs = 0;
     uint32_t doneSyntheticRemainingMs = 0;
+    uint32_t doneSyntheticAutoDelayMs = 0;
+    uint32_t doneSyntheticAutoHoldMs = 0;
     SealerWaitDoneBlockReason waitDoneBlockReason = SealerWaitDoneBlockReason::None;
     SealerRunState runState = SealerRunState::Idle;
 };
@@ -78,6 +81,10 @@ void setStartOutput(bool active);
 bool startPulse(uint32_t pulseMs);
 bool scheduleDoneEmulationOnce(uint32_t delayMs, uint32_t holdMs);
 bool cancelDoneEmulation();
+bool setAutoDoneEmulation(bool enabled, uint32_t delayMs, uint32_t holdMs);
+bool isAutoDoneEmulationEnabled();
+uint32_t getAutoDoneEmulationDelayMs();
+uint32_t getAutoDoneEmulationHoldMs();
 
 // Сервисные значения и флаги для внешнего слоя.
 bool isStartPulseActive();

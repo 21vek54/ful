@@ -20,13 +20,23 @@ bin/*.bin
 # Local secret files
 **/wifi_secrets_local.h
 **/mqtt_secrets_local.h
+tools/service/openai_api_key_local.txt
 
 # Local caches
 Thumbs.db
 .DS_Store
 **/.cache/
 **/compile_commands.json
+**/__pycache__/
 .cursor/
+
+# Project-local build and run output
+.pio_build_local/
+.pio_core_local/
+logs/
+tmp/
+*.dtmp
+*.bkp
 
 # Project-local infra runtime
 infra/node-red/userdir/node_modules/
@@ -43,6 +53,7 @@ infra/node-red/userdir/.config.users.json
 infra/node-red/userdir/.config.users.json.*
 infra/node-red/userdir/.flows.json.backup
 infra/node-red/userdir/.flows_cred.json.backup
+infra/node-red/userdir/flows.json.bak-*
 infra/node-red/userdir/flows.backup*.json
 infra/node-red/userdir/flows.before-*.json
 infra/node-red/userdir/flows.corrupted*.json

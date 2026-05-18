@@ -9,6 +9,8 @@
 #include "app/cycle_control.h"
 #include "app/manual_runtime.h"
 #include "app/motion_control.h"
+#include "app/pause_contract.h"
+#include "app/post7_supervisor.h"
 #include "comm/i2c_bus.h"
 #include "core/pins.h"
 #include "core/settings.h"
@@ -374,6 +376,21 @@ void shiftHookProcessI2cBus()
     comm::processI2cBus();
 }
 
+void shiftHookProcessOutfeedGroup()
+{
+    groups::outfeed::processOutfeedGroup();
+}
+
+void shiftHookProcessSealerGroup()
+{
+    groups::sealer::processSealerGroup();
+}
+
+void shiftHookProcessPost7Supervisor()
+{
+    app::post7::processPost7Supervisor();
+}
+
 bool shiftHookIsMotionActive()
 {
     return motionMainIsActive();
@@ -486,6 +503,7 @@ void firmwareSetup()
     groups::infeed::initInfeedGroup();
     groups::outfeed::initOutfeedGroup();
     groups::sealer::initSealerGroup();
+    app::post7::initPost7Supervisor();
     comm::initI2cBus();
     initRuntimeState();
     registerManualRuntimeCallbacks();
@@ -498,6 +516,7 @@ void firmwareLoop()
     shiftUpdateSensorFilters();
     comm::processI2cBus();
     readSerialCommands();
+    app::pauseContractTick();
 
     processCycle2();
     processMotion();
@@ -507,5 +526,6 @@ void firmwareLoop()
     groups::infeed::processInfeedGroup();
     groups::outfeed::processOutfeedGroup();
     groups::sealer::processSealerGroup();
+    app::post7::processPost7Supervisor();
     app::processBoardMonitor();
 }

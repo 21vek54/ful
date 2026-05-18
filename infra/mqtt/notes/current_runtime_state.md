@@ -2,6 +2,10 @@
 
 Дата фиксации: 2026-03-25
 
+> Историческая заметка для minimal-контура.
+> Для `version_5` production-прошивка `COM12` берется из
+> `archive/firmware/master_control_com12_legacy_2026-03-25`.
+
 ### 1) Текущий operational mode службы Mosquitto
 
 - Служба Windows `mosquitto` работает в штатном service-режиме:

@@ -3,6 +3,9 @@
 void shiftHookUpdateMainSensorFilter();
 void shiftHookProcessPositionalMotion();
 void shiftHookProcessI2cBus();
+void shiftHookProcessOutfeedGroup();
+void shiftHookProcessSealerGroup();
+void shiftHookProcessPost7Supervisor();
 bool shiftHookIsMotionActive();
 bool shiftHookIsCycle2Active();
 bool shiftHookIsPositionalMotionActive();

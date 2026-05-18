@@ -13,9 +13,16 @@
       "path": "firmware/manipulator_com11"
     },
     {
-      "name": "master_control_com12",
+      "name": "master_control_com12_PRODUCTION_v5",
+      "path": "archive/firmware/master_control_com12_legacy_2026-03-25"
+    },
+    {
+      "name": "master_control_com12_MINIMAL_NON_PROD",
       "path": "firmware/master_control_com12"
     }
   ],
-  "settings": {}
+  "settings": {
+    "chatgpt.commentCodeLensEnabled": true,
+    "chatgpt.openOnStartup": true
+  }
 }

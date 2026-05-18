@@ -43,11 +43,14 @@ static constexpr uint16_t STATUS_ALARM_BIT = 1U << 3;
 static constexpr uint16_t STATUS_CALIBRATED_BIT = 1U << 4;
 static constexpr uint16_t STATUS_STEP7_READY_BIT = 1U << 5;
 static constexpr uint16_t STATUS_STEP3_READY_BIT = 1U << 6;
+static constexpr uint16_t STATUS_WORK_START_READY_BIT = 1U << 7;
+static constexpr uint16_t STATUS_NEEDS_GRIP_OPEN_ONLY_BIT = 1U << 8;
 static constexpr uint16_t ERROR_DRIVER_ALARM_BIT = 1U << 0;
 static constexpr uint16_t ERROR_LIMITS_CONFLICT_BIT = 1U << 1;
 static constexpr uint16_t ERROR_Z_CONFLICT_BIT = 1U << 2;
 static constexpr uint16_t ERROR_GRIP_CONFLICT_BIT = 1U << 3;
 static constexpr uint16_t ERROR_NOT_CALIBRATED_BIT = 1U << 4;
+static constexpr uint16_t ERROR_PAUSE_STATUS_ACK_VALID_BIT = 1U << 5;
 static constexpr uint16_t MODE_CODE_IDLE = 1;
 static constexpr uint16_t MODE_CODE_BUSY = 2;
 static constexpr uint16_t MODE_CODE_ERROR = 3;
@@ -87,6 +90,11 @@ static volatile uint8_t g_i2cCommandTail = 0;
 static volatile uint8_t g_i2cCommandCount = 0;
 static volatile uint32_t g_i2cDroppedCommandCount = 0;
 static uint32_t g_i2cDroppedCommandCountLogged = 0;
+static constexpr uint32_t WORK_START_UNKNOWN_GRIP_LOG_THROTTLE_MS = 2000;
+static bool g_workStartUnknownGripLatched = false;
+static uint32_t g_workStartUnknownGripLastLogMs = 0;
+static uint16_t g_pauseWireEpoch = 0;
+static bool g_pauseWireValid = false;
 
 // =====================================================
 // ДОБАВЛЕНО: логика авто-восстановления (как команда V)
@@ -181,6 +189,66 @@ static bool isManipulatorBusy() {
     return isMoving || workCycleInProgress || testInProgress || greaseRemovalInProgress || calibrationInProgress;
 }
 
+static bool runServicePrepToInitialState() {
+    Serial.println("PREP INIT: started");
+    updateAllSensors();
+
+    if (isManipulatorBusy()) {
+        Serial.println("PREP INIT: blocked (busy)");
+        return false;
+    }
+    if (!isCalibrated) {
+        Serial.println("PREP INIT: blocked (not calibrated)");
+        return false;
+    }
+    if (stepperIsAlarm() || isAnyConflict()) {
+        Serial.println("PREP INIT: blocked (alarm/conflict)");
+        return false;
+    }
+
+    if (checkInitialStateSimple()) {
+        Serial.println("PREP INIT: already ready");
+        return true;
+    }
+
+    if (isZUp()) {
+        Serial.println("PREP INIT: already up");
+    } else {
+        Serial.println("PREP INIT: lifting up");
+        if (!pneumoZUpSafeEnhanced()) {
+            Serial.println("PREP INIT: failed (lift timeout)");
+            return false;
+        }
+    }
+
+    updateAllSensors();
+    if (!isGripOpen()) {
+        if (!pneumoGripOpenSafeEnhanced()) {
+            Serial.println("PREP INIT: failed (grip open timeout)");
+            return false;
+        }
+    }
+    Serial.println("PREP INIT: grip opened");
+
+    updateAllSensors();
+    if (!isRightLimitPressed()) {
+        if (!moveRightSafe()) {
+            Serial.println("PREP INIT: failed (move right timeout/blocked)");
+            return false;
+        }
+    }
+    Serial.println("PREP INIT: moved right");
+
+    updateAllSensors();
+    if (checkInitialStateSimple()) {
+        Serial.println("PREP INIT: ready confirmed (right/up/open)");
+        return true;
+    }
+
+    Serial.println("PREP INIT: failed (ready confirm mismatch)");
+    return false;
+}
+
 static uint16_t getManipulatorModeCode() {
     if (stepperIsAlarm() || isAnyConflict()) return MODE_CODE_ERROR;
     if (isManipulatorBusy()) return MODE_CODE_BUSY;
@@ -196,10 +264,73 @@ static uint16_t getManipulatorJobCode() {
     return JOB_CODE_NONE;
 }
 
+struct ManipulatorWorkStartFlags {
+    bool workStartReady = false;
+    bool needsGripOpenOnly = false;
+};
+
+static void traceWorkStartUnknownGrip(bool active) {
+    const uint32_t nowMs = millis();
+
+    if (active) {
+        if (!g_workStartUnknownGripLatched ||
+            static_cast<uint32_t>(nowMs - g_workStartUnknownGripLastLogMs) >=
+                WORK_START_UNKNOWN_GRIP_LOG_THROTTLE_MS) {
+            Serial.println(
+                F("I2C WORK_START WARN: right+zUp, grip neither OPEN nor CLOSED -> "
+                  "work_start_ready=0, needs_grip_open_only=0"));
+            g_workStartUnknownGripLastLogMs = nowMs;
+        }
+        g_workStartUnknownGripLatched = true;
+        return;
+    }
+
+    if (g_workStartUnknownGripLatched) {
+        Serial.println(F("I2C WORK_START INFO: grip state normalized for right+zUp"));
+    }
+    g_workStartUnknownGripLatched = false;
+}
+
+static ManipulatorWorkStartFlags getManipulatorWorkStartFlags() {
+    updateAllSensors();
+
+    ManipulatorWorkStartFlags flags = {};
+    if (stepperIsAlarm() || isAnyConflict()) {
+        traceWorkStartUnknownGrip(false);
+        return flags;
+    }
+
+    if (!isRightLimitPressed() || !isZUp()) {
+        traceWorkStartUnknownGrip(false);
+        return flags;
+    }
+
+    const bool gripOpen = isGripOpen();
+    const bool gripClosed = isGripClosed();
+
+    if (gripOpen) {
+        traceWorkStartUnknownGrip(false);
+        flags.workStartReady = true;
+        return flags;
+    }
+
+    if (gripClosed) {
+        // Безопасная семантика: "needs_grip_open_only=1" только при устойчивом CLOSED.
+        // Переходные/сомнительные состояния захвата не считаем веткой "только Q".
+        traceWorkStartUnknownGrip(false);
+        flags.needsGripOpenOnly = true;
+        return flags;
+    }
+
+    traceWorkStartUnknownGrip(true);
+    return flags;
+}
+
 static uint16_t getManipulatorStatusWord() {
     uint16_t word = 0;
     const bool safe = isSystemSafe();
     const bool alarm = stepperIsAlarm() || isAnyConflict();
+    const ManipulatorWorkStartFlags workStartFlags = getManipulatorWorkStartFlags();
 
     if (!alarm) {
         word |= STATUS_READY_BIT;
@@ -222,6 +353,12 @@ static uint16_t getManipulatorStatusWord() {
     if (isWorkCycleStep7Reached()) {
         word |= STATUS_STEP7_READY_BIT;
     }
+    if (workStartFlags.workStartReady) {
+        word |= STATUS_WORK_START_READY_BIT;
+    }
+    if (workStartFlags.needsGripOpenOnly) {
+        word |= STATUS_NEEDS_GRIP_OPEN_ONLY_BIT;
+    }
     return word;
 }
 
@@ -232,6 +369,10 @@ static uint16_t getManipulatorErrorWord() {
     if (isZConflict()) word |= ERROR_Z_CONFLICT_BIT;
     if (isGripConflict()) word |= ERROR_GRIP_CONFLICT_BIT;
     if (!isCalibrated) word |= ERROR_NOT_CALIBRATED_BIT;
+    if (g_pauseWireValid) {
+        word |= ERROR_PAUSE_STATUS_ACK_VALID_BIT;
+        word |= static_cast<uint16_t>((g_pauseWireEpoch & 0x3FFU) << 6);
+    }
     return word;
 }
 
@@ -479,6 +620,54 @@ void processCommand(String command) {
     String upperCommand = command;
     upperCommand.toUpperCase();
 
+    if (upperCommand.startsWith("PAUSE ")) {
+        String rest = upperCommand.substring(6);
+        rest.trim();
+        rest.replace('\t', ' ');
+        const int sp = rest.indexOf(' ');
+        const String verb = sp < 0 ? rest : rest.substring(0, sp);
+        const String epStr = sp < 0 ? String("") : rest.substring(sp + 1);
+        String epTrim = epStr;
+        epTrim.trim();
+        if (epTrim.length() == 0) {
+            Serial.println("PAUSE: need epoch");
+            return;
+        }
+        bool epOk = true;
+        uint32_t epVal = 0;
+        for (size_t i = 0; i < epTrim.length(); i++) {
+            const char c = epTrim.charAt(i);
+            if (c < '0' || c > '9') {
+                epOk = false;
+                break;
+            }
+            epVal = epVal * 10U + static_cast<uint32_t>(c - '0');
+        }
+        if (!epOk) {
+            Serial.println("PAUSE: bad epoch");
+            return;
+        }
+        g_pauseWireEpoch = static_cast<uint16_t>(epVal & 0x3FFU);
+        if (verb == "ARM" || verb == "STATUS") {
+            g_pauseWireValid = true;
+        } else if (verb == "RELEASE") {
+            g_pauseWireValid = false;
+        } else {
+            Serial.println("PAUSE: use PAUSE ARM|STATUS|RELEASE <epoch>");
+            return;
+        }
+        Serial.print("PAUSE ");
+        Serial.print(verb);
+        Serial.print(" epoch=");
+        Serial.println(g_pauseWireEpoch);
+        return;
+    }
+
+    if (upperCommand == "PREP" || upperCommand == "PREP INIT" || upperCommand == "PREP START") {
+        runServicePrepToInitialState();
+        return;
+    }
+
     char cmd = command.charAt(0);
 
     // Проверяем, не выполняется ли рабочий цикл или тест
@@ -718,6 +907,7 @@ void printHelp() {
     Serial.println("  C/c      - очистка EEPROM (полный сброс)");
     Serial.println("  Z/z      - экстренная остановка");
     Serial.println("  X/x      - аварийный сброс драйвера (через реле)");
+    Serial.println("  PREP INIT - service prep: привести в право/верх/разжат");
     Serial.println("  I2C status - addr 13, SDA=GPIO16, SCL=GPIO17");
 
     Serial.println(String(40, '='));

@@ -8,6 +8,7 @@
 #include "groups/sealer/sealer_group.h"
 #include "legacy/program1.h"
 #include "legacy/shift_control.h"
+#include "app/post7_supervisor.h"
 
 namespace {
 
@@ -17,6 +18,8 @@ constexpr int8_t FEED_BUFFER_PAIR = 2;
 constexpr int8_t IN2_PAIRS_UNKNOWN = -1;
 constexpr int8_t IN2_PAIRS_EMPTY = 0;
 constexpr int8_t IN2_PAIRS_FULL = 3;
+constexpr int8_t SEALER_PLATE_COUNT_UNKNOWN = -1;
+constexpr int8_t SEALER_PLATE_RESIDUAL = 6;
 
 struct FeedSideRuntimeModel {
     bool synced = false;
@@ -27,6 +30,7 @@ struct FeedSideRuntimeModel {
 };
 
 FeedSideRuntimeModel g_feedSideModel = {};
+bool g_program1AbortRecoveryRequired = false;
 
 bool isConveyorFlagUp()
 {
@@ -93,6 +97,30 @@ void refreshFeedSideFlags(app::ConveyorStatusInputs &inputs)
 
     inputs.feedSideEmptyValid = modelHasSnapshot;
     inputs.feedSideEmptyStrict = strictEmpty;
+    inputs.feedBufferCount = g_feedSideModel.bufferCount;
+    inputs.feedBufferCountKnown = g_feedSideModel.bufferCount != FEED_BUFFER_UNKNOWN;
+    inputs.feedIn2Pairs = g_feedSideModel.in2Pairs;
+    inputs.feedIn2PairsKnown =
+        g_feedSideModel.synced && g_feedSideModel.in2Pairs != IN2_PAIRS_UNKNOWN;
+}
+
+void refreshSealerPlateHints(app::ConveyorStatusInputs &inputs)
+{
+    const bool sealerResidualObserved =
+        inputs.sealer.busy ||
+        inputs.sealer.doneInputActive ||
+        inputs.sealer.startPulseActive;
+
+    if (sealerResidualObserved) {
+        inputs.sealerPlateCount = SEALER_PLATE_RESIDUAL;
+        inputs.sealerPlateCountKnown = true;
+        return;
+    }
+
+    // На COM10 нет отдельного датчика "запайщик пуст/не пуст".
+    // Если прямых признаков остатка нет, считаем состояние неизвестным.
+    inputs.sealerPlateCount = SEALER_PLATE_COUNT_UNKNOWN;
+    inputs.sealerPlateCountKnown = false;
 }
 
 } // namespace
@@ -110,8 +138,11 @@ ConveyorStatusInputs readConveyorStatusInputs()
     inputs.program1PassIndex = program1GetPassIndex();
     inputs.program1Active = inputs.program1StateCode != 0U;
     inputs.batchReady = program1IsBatchReadyForManipulator();
+    inputs.program1AbortRecoveryRequired = g_program1AbortRecoveryRequired;
     inputs.flagUp = isConveyorFlagUp();
+    inputs.post7ManualRecoveryRequired = post7::isManualRecoveryRequired();
     refreshFeedSideFlags(inputs);
+    refreshSealerPlateHints(inputs);
     return inputs;
 }
 
@@ -168,7 +199,13 @@ void conveyorFeedSideNoteProgram1Finished()
 
 void conveyorFeedSideNoteProgram1Aborted()
 {
+    g_program1AbortRecoveryRequired = true;
     invalidateConveyorFeedSideModelInternal("program1 aborted");
+}
+
+void conveyorFeedSideNoteProgram1StoppedByPauseArm()
+{
+    invalidateConveyorFeedSideModelInternal("program1 stopped by pause arm");
 }
 
 void conveyorFeedSideNoteIn2Consumed()
@@ -185,6 +222,27 @@ void conveyorFeedSideNoteIn2Consumed()
 void invalidateConveyorFeedSideModel(const char *reason)
 {
     invalidateConveyorFeedSideModelInternal(reason);
+}
+
+bool conveyorProgram1AbortRecoveryRequired()
+{
+    return g_program1AbortRecoveryRequired;
+}
+
+void clearConveyorProgram1AbortRecoveryRequired(const char *reason)
+{
+    if (!g_program1AbortRecoveryRequired) {
+        return;
+    }
+
+    g_program1AbortRecoveryRequired = false;
+    Serial.print("P1 recovery: abort latch cleared");
+    if (reason != nullptr && reason[0] != '\0') {
+        Serial.print(" (");
+        Serial.print(reason);
+        Serial.print(")");
+    }
+    Serial.println(".");
 }
 
 } // namespace app

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "app/conveyor_status_runtime.h"
+#include "app/pause_contract.h"
 #include "legacy/program1.h"
 
 namespace {
@@ -55,6 +56,7 @@ void fillI2cStatusFrame(I2cStatusFrame &frame)
         frame.extra3 |= 0x8000U;
     }
     frame.heartbeatMs = millis();
+    app::pauseContractApplyToI2cFrame(frame);
     frame.checksum = checksumI2cStatusFrame(frame);
 }
 

@@ -17,7 +17,8 @@ RuntimeState g_runtimeState;
 
 void printStartupBanner() {
     Serial.println();
-    Serial.println("master_control_com12 minimal");
+    Serial.println("master_control_com12 minimal NON-PRODUCTION");
+    Serial.println("production COM12: archive/.../master_control_com12_legacy_2026-03-25");
     Serial.println("role: Wi-Fi + MQTT + I2C board online/offline");
     Serial.print("i2c sda=");
     Serial.print(PIN_I2C_SDA);
